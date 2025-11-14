@@ -83,10 +83,10 @@ function SupportDialog({ vault, fighter }: SupportDialogProps) {
   const [customAmount, setCustomAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Use actual vault ID from seed data if available
-  // For now, using mock vault ID
-  const vaultId = "0x4082a554f6c07ded323f19afe1b1c74786311c931f12f4579d2ba704d20702e3"; // From SEED_DATA.json
-  const fighterId = "0x1dc69a515e37a3cca7e98c852315ee0d56a52c6db24696e181bb7b69d5e98bab"; // From SEED_DATA.json
+  // Use actual vault ID from seed data
+  // These IDs are updated from SEED_DATA.json after deployment
+  const vaultId = "0xf2d904e7e973775abfe2ac1faa45579c56106d6a57671a3a361f53256caeb335"; // From SEED_DATA.json
+  const fighterId = "0x7d916c939752027da9f47e711f1210d8d886643f30d7e2a868fe71ebf4c0c30f"; // From SEED_DATA.json
 
   const handleSupport = async () => {
     if (!currentAccount || !signAndExecuteTransactionBlock) {
