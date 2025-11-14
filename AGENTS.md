@@ -1,6 +1,6 @@
-# Agent Playbook — Open Corner on Sui
+# Agent Playbook — ONE Fight Arena DAO
 
-このリポジトリは「Open Corner on Sui」ハッカソンMVPを素早く組み立てるための共同作業場です。以下のガードレールと役割定義に従って開発を進めてください。
+このリポジトリは「ONE Fight Arena DAO」ハッカソンMVPを素早く組み立てるための共同作業場です。以下のガードレールと役割定義に従って開発を進めてください。
 
 ## 1. ミッションと背景
 - ONE Championshipのファン主導プロモーションを Sui 上で証明する。
@@ -9,16 +9,39 @@
 
 ## 2. コア技術スタック
 - **Web**: Next.js App Router + TypeScript + Tailwind CSS + shadcn/ui。パッケージマネージャは **Bun** を第一優先に利用する。
-- **Sui**: Mysten TypeScript SDK, wallet-kit, zkLogin（または互換ウォレット）。Move パッケージは `move/open_corner/` 配下に配置。
-- **データ**: Sui RPC/GraphQL。必要なら軽量な JSON データソースまたは Supabase 等を `lib/` に実装。
+- **Sui**: Mysten TypeScript SDK, wallet-kit。Move パッケージは `move/open_corner/` 配下に配置。zkLoginとSponsored TransactionsはStretch目標。
+- **データ**: Sui JSON-RPC（MVP）。GraphQL RPCはStretch目標。必要なら軽量な JSON データソースまたは Supabase 等を `lib/` に実装。
 - **ツール**: ESLint + Biome (optional) + Prettier, Vitest, React Testing Library, Move unit tests, GitHub Actions (CI)。
 
 ## 3. ディレクトリ・役割
 ```
 app/                 Next.js routes (App Router)
+  ├─ layout.tsx
+  ├─ page.tsx (landing/event list)
+  ├─ event/[slug]/page.tsx (markets + fighter tabs)
+  ├─ fighter/[id]/page.tsx
+  ├─ admin/
+  │  ├─ layout.tsx
+  │  └─ page.tsx
+  └─ api/
+     └─ notifications/route.ts (email/webhook)
 components/          Reusable UI primitives + feature widgets
+  ├─ ui/ (shadcn clones)
+  ├─ market/
+  ├─ vault/
+  └─ shared/
 features/            Feature-specific hooks/state/business logic
+  ├─ onboarding/
+  ├─ markets/
+  └─ support-vault/
 lib/                 Sui client, auth, analytics, utilities
+  ├─ sui/
+  │  ├─ client.ts
+  │  ├─ transactions.ts
+  │  └─ queries.ts
+  ├─ auth/
+  ├─ analytics/
+  └─ utils/
 move/open_corner/    Move modules (fighters, support, markets)
 scripts/             Tooling (docs crawler, seeding, settlement)
 docs/                Requirements + scraped references
@@ -38,7 +61,8 @@ docs/                Requirements + scraped references
 
 ### Move / Chain
 - Move packages: `fighters.move`, `support.move`, `markets.move`。モジュール構造と公開関数は requirements に記載の API を守る。
-- ローカルテスト: `sui move test` 必須。`move/open_corner/README.md` にビルド手順と公開IDを記録。
+- MVPでは固定オッズ市場を実装（CPMMはStretch目標）。DeepBook統合もStretch目標（`docs/market-technology-decision.md`参照）。
+- ローカルテスト: `sui move test` 必須。クリティカルパス（create_vault, deposit, trade, resolve）のみテスト。`move/open_corner/README.md` にビルド手順と公開IDを記録。
 - 本番用デプロイ（Testnet）後はパッケージIDを `.env` と `docs/requirements.md` に更新。
 
 ### Tooling / DevRel

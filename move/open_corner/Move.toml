@@ -1,0 +1,14 @@
+[package]
+name = "open_corner"
+version = "0.1.0"
+edition = "2024.beta"
+
+[addresses]
+open_corner = "0x0"
+
+[dependencies]
+# Sui framework dependencies are automatically added
+
+[dev-dependencies]
+# Test dependencies are automatically added
+
