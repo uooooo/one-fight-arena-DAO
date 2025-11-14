@@ -64,7 +64,14 @@
 
 The tab bar persists at the top of the event detail page so fans can flip contexts without losing scroll position; state syncing keeps wallet balances consistent across both layers.
 
-## 7. Functional Requirements
+## 7. MVP Scope vs Stretch
+- **On-chain MVP (Move)**: single event, one fighter spotlight, binary CPMM markets with fixed fee, SupportVault that accepts deposits + emits events, Supporter NFT tiers mapped to static metadata (no perk automation), manual market resolution via CLI.
+- **DeepBook Stretch**: once CPMM flows are stable, evaluate swapping the market module to route trades through DeepBookV3 (CLOB) so we showcase another Sui-native primitive. Requires integrating DeepBook SDK and handling maker/taker fee semantics.
+- **On-chain Stretch**: multi-event registry, complex perk unlock logic, vault withdrawal scheduling, multi-outcome markets, auto-liquidity rebalancing.
+- **Wallet MVP**: Sui wallet-kit connect (browser extension / mobile) plus Sponsored Transactions for fees; zkLogin is deferred until base flows stabilize.
+- **Frontend Expectation**: even with minimal Move scope, the Markets/Support tabs should feel production-ready (charts, drawers, storytelling blocks). Visual richness is prioritized even if backend interactions are stubbed/mocked early on.
+
+## 8. Functional Requirements
 ### F1. Event & Fighter Surfacing
 - List current Fight Week event(s) with countdowns and highlight fighters participating in MVP.
 - Each fighter card pulls from `FighterProfile` (on-chain) plus editorial metadata stored in JSON (Sanity-like or local file) for fallback.
@@ -72,32 +79,34 @@ The tab bar persists at the top of the event detail page so fans can flip contex
 - Support "Spotlight" slider for trending markets based on liquidity/volume metrics.
 
 ### F2. Wallet & Identity Layer
-- Provide zkLogin (preferred) and fallback wallet kit connect (`@mysten/wallet-kit`).
+- Phase 1: integrate wallet-kit connect (`@mysten/wallet-kit`) with support for Sui extension wallets; capture connected address + network.
+- Phase 2 (stretch): add zkLogin based on Mysten docs; keep interfaces agnostic so both auth methods share the same session store.
 - Persist lightweight session (NextAuth or custom) keyed by Sui address + email alias.
 - Sponsored Transactions for deposits/trades during demo (per docs: `TransactionBlock` builder + sponsor signature flow).
 
 ### F3. SupportVault & Supporter NFTs
-- Move module exposes `create_vault`, `deposit`, `withdraw_by_admin`, `mint_supporter_nft`, `record_perk`.
-- UI: tiered CTA (Bronze 5 SUI, Silver 15 SUI, Gold 50 SUI) with dynamic progress bar.
-- Display ledger: contributions, perk unlocks, planned disbursements.
+- MVP Move functions: `create_vault`, `deposit`, `mint_supporter_nft`. `withdraw_by_admin` and `record_perk` can be stubbed/no-ops until stretch.
+- UI: tiered CTA (Bronze 5 SUI, Silver 15 SUI, Gold 50 SUI) with dynamic progress bar sourced from on-chain balance.
+- Display ledger: contributions, perk unlocks, planned disbursements (off-chain JSON allowed initially; sync to Move events later).
 
 ### F4. Prediction Markets (Fight Week)
 - Module components: `Event`, `Market`, `OrderBook/Pool`, `PositionNFT`.
 - Market types: binary (YES/NO) with CPMM pricing; store `resolve_state`, `liquidity`, `fee_bps`.
+- MVP support: create market, add liquidity, trade, resolve, redeem. Slippage + price chart may rely on local calculations/mock data while Move emits essential events.
 - Frontend features: order form with slippage warning, price chart, market odds card, share redemption modal.
 
 ### F5. Analytics & Telemetry
 - Client events (login, deposit, trade, redeem) batched to PostHog or simple server endpoint.
 - On-chain watchers via Sui GraphQL to sync vault totals for dashboards.
 
-## 8. Non-Functional Requirements
+## 9. Non-Functional Requirements
 - **Performance**: Largest interactive route < 200KB JS after code-splitting. Markets refresh every 5s via SWR/polling.
 - **Security**: Input validation on deposit sizes, signature domain separation, capability-guarded Move functions. Enforce Content Security Policy for wallet popups.
 - **Reliability**: Graceful fallback when RPC fails (retry, show stale data). Provide offline stub for demo.
 - **Accessibility**: Keyboard navigable, color contrast ≥ 4.5:1, localized copy strings file for EN/JA.
 - **Observability**: Server logs (pino), Move events indexed for debugging.
 
-## 9. On-Chain Design (Move)
+## 10. On-Chain Design (Move)
 - **Modules**: `open_corner::fighters`, `open_corner::support`, `open_corner::markets`.
 - **Objects**:
   - `FighterProfile { id, owner, bio_hash, socials, vault_cap }`
@@ -111,8 +120,13 @@ The tab bar persists at the top of the event detail page so fans can flip contex
   - `VaultManagerCap` delegated per fighter for team-managed withdrawals.
   - Fans interact permissionlessly with deposit/trade endpoints within guardrails.
 - **Events**: `FighterCreated`, `VaultDeposited`, `SupporterMinted`, `MarketTraded`, `MarketResolved`, `PayoutClaimed`.
+- **MVP Simplifications**:
+  - Single `Event` and limited `Market` count hardcoded in genesis script.
+  - `SupporterNFT` metadata stored on-chain as simple string; no dynamic perk updates.
+  - Fee vault distributes a flat % to SupportVault on resolution; no progressive tiers yet.
+  - No admin dashboard; settlements occur through CLI script calling `resolve_market`.
 
-## 10. Application Architecture
+## 11. Application Architecture
 - **Client**: Next.js App Router, React Server Components for data fetching, client components for wallet interactions.
 - **Data layer**:
   - `lib/sui/client.ts` exports JSON-RPC + GraphQL clients (per Mysten TypeScript SDK docs).
@@ -122,7 +136,7 @@ The tab bar persists at the top of the event detail page so fans can flip contex
 - **Styling/UI**: Tailwind + shadcn/ui components (Card, Tabs, Dialog, Toast, Skeleton).
 - **Testing**: Vitest + React Testing Library for UI; Move unit tests for modules; integration script that spins up local Sui network for e2e.
 
-## 11. Directory Layout (proposal)
+## 12. Directory Layout (proposal)
 ```
 .
 ├─ app/
@@ -169,7 +183,7 @@ The tab bar persists at the top of the event detail page so fans can flip contex
    └─ ui/ (optional shared lib if time allows)
 ```
 
-## 12. Delivery Milestones
+## 13. Delivery Milestones
 | Phase | Scope | Key Outputs |
 | --- | --- | --- |
 | **M0 – Environment (Day 0)** | Bun toolchain, Next.js baseline, shadcn setup, lint/test scaffolding | Repo bootstrapped, CI running lint/test | 
@@ -177,7 +191,7 @@ The tab bar persists at the top of the event detail page so fans can flip contex
 | **M2 – Frontend MVP (Day 2)** | Wallet onboarding, fighter detail, market view, deposit/trade flows | Demo-ready UI with mocked data |
 | **M3 – Integration & Settlement (Day 3)** | Hook UI to live Sui package, settlement dashboard, analytics, polish | Storyboarded demo + walkthrough video |
 
-## 13. Future Extensions (Pitch Only)
+## 14. Future Extensions (Pitch Only)
 - PPV affiliate tracking via dynamic NFT passes.
 - AI-powered story prompts and scouting index overlays.
 - Native mobile experience + push notifications.
