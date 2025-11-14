@@ -1,32 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Wallet } from "lucide-react";
+import { ConnectButton } from "@mysten/wallet-kit";
 import { useWalletKit } from "@mysten/wallet-kit";
 
 export function Navbar() {
-  const { currentWallet, connect, disconnect, isConnected, currentAccount } = useWalletKit();
-
-  const handleWalletClick = async () => {
-    if (isConnected) {
-      await disconnect();
-    } else {
-      // Open wallet selection modal
-      // connect() with no arguments should open the modal
-      // If it requires a wallet name, we'll need to handle it differently
-      try {
-        // @mysten/wallet-kit v0.8.6 requires a wallet name
-        // We'll show a message to the user to select a wallet
-        // The modal should appear automatically when connect() is called
-        await connect("Sui Wallet");
-      } catch (error) {
-        // If specific wallet fails, the modal should still appear
-        console.log("Wallet connection initiated:", error);
-      }
-    }
-  };
+  const { isConnected, currentAccount } = useWalletKit();
 
   const address = currentAccount?.address;
   const displayAddress = address
@@ -78,17 +58,14 @@ export function Navbar() {
               {displayAddress}
             </Badge>
           )}
-          <Button
-            variant={isConnected ? "outline" : "default"}
-            onClick={handleWalletClick}
-            className="gap-2"
-          >
-            <Wallet className="h-4 w-4" />
-            <span className="hidden sm:inline">
-              {isConnected ? "Disconnect" : "Connect Wallet"}
-            </span>
-            <span className="sm:hidden">{isConnected ? "Disconnect" : "Connect"}</span>
-          </Button>
+          <ConnectButton 
+            connectText={
+              <span className="hidden sm:inline">Connect Wallet</span>
+            }
+            connectedText={
+              <span className="hidden sm:inline">Disconnect</span>
+            }
+          />
         </div>
       </div>
     </nav>

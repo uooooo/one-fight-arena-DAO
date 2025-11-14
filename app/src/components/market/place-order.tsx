@@ -62,7 +62,7 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
       //   },
       // });
 
-      console.log("Transaction result:", result);
+      // console.log("Transaction result:", result);
       
       // Reset form
       setPrice("");

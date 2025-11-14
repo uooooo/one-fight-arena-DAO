@@ -30,9 +30,10 @@ export async function getObjects(objectIds: string[]) {
   });
 }
 
-// Helper function to query objects by type
-export async function queryObjectsByType(type: string) {
+// Helper function to query objects by type for a specific owner
+export async function queryObjectsByType(owner: string, type: string) {
   return await suiClient.getOwnedObjects({
+    owner,
     filter: {
       StructType: type,
     },
