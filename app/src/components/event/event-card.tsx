@@ -47,7 +47,7 @@ export function EventCard({
   const config = statusConfig[status];
 
   return (
-    <Card className="group transition-all hover:shadow-lg hover:border-one-yellow/30 border-border bg-card">
+    <Card className="group transition-all hover:shadow-lg hover:border-one-yellow/30 border-border bg-[hsl(225,7%,32%)] hover:bg-[hsl(225,7%,35%)]">
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between gap-3 mb-3">
           <CardTitle className="text-lg font-semibold leading-tight pr-2">{title}</CardTitle>

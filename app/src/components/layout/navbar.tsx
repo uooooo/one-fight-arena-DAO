@@ -68,7 +68,7 @@ export function Navbar() {
               {displayAddress}
             </Badge>
           )}
-          <div className="[&_button]:bg-one-yellow [&_button]:text-one-gray [&_button]:hover:bg-one-yellow-dark [&_button]:font-medium [&_button]:text-sm [&_button]:px-4 [&_button]:py-1.5 [&_button]:rounded">
+          <div className="[&_button]:bg-one-yellow [&_button]:text-one-gray [&_button]:hover:bg-one-yellow-dark [&_button]:font-medium [&_button]:text-sm [&_button]:px-4 [&_button]:py-1.5 [&_button]:h-9 [&_button]:rounded-md">
             <ConnectButton 
               connectText={
                 <span className="hidden sm:inline">Connect Wallet</span>
