@@ -28,7 +28,10 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handlePlaceOrder = async () => {
-    if (!currentAccount || !price || !quantity) {
+    if (!currentAccount || !price || !quantity || !signAndExecuteTransactionBlock) {
+      if (!currentAccount) {
+        alert("Please connect your wallet first.");
+      }
       return;
     }
 
@@ -48,28 +51,33 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
         tx
       );
 
-      // Build and sign the transaction
-      // Note: Transaction API needs to be properly integrated with wallet-kit
-      // For MVP, we'll show a placeholder message
-      alert("Transaction functionality will be implemented after Move package deployment. Please ensure your wallet is connected.");
-      
-      // TODO: Implement proper transaction signing once Move package is deployed
-      // const result = await signAndExecuteTransactionBlock({
-      //   transaction: tx,
-      //   options: {
-      //     showEffects: true,
-      //     showEvents: true,
-      //   },
-      // });
+      // Execute transaction
+      const result = await signAndExecuteTransactionBlock({
+        transaction: tx,
+        options: {
+          showEffects: true,
+          showEvents: true,
+          showObjectChanges: true,
+          showBalanceChanges: true,
+        },
+      });
 
-      // console.log("Transaction result:", result);
+      console.log("Transaction result:", result);
+      
+      // Wait for transaction to be indexed
+      await suiClient.waitForTransaction({
+        digest: result.digest,
+      });
+
+      alert(`Order placed successfully! Transaction: ${result.digest}`);
       
       // Reset form
       setPrice("");
       setQuantity("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error placing order:", error);
-      alert("Failed to place order. Please try again.");
+      const errorMessage = error?.message || "Failed to place order. Please try again.";
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
