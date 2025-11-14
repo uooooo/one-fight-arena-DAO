@@ -67,17 +67,18 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
             <CardContent className="space-y-4">
               {/* Odds Display */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-lg border border-border bg-muted/50 p-4">
+                <div className="group relative overflow-hidden rounded-lg border-2 border-primary/20 bg-muted/50 p-4 transition-all hover:border-primary/50 hover:bg-muted/70 cursor-pointer">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingUp className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium text-muted-foreground">YES</span>
                   </div>
-                  <div className="text-2xl font-bold">{market.yesOdds.toFixed(2)}x</div>
+                  <div className="text-2xl font-bold text-primary">{market.yesOdds.toFixed(2)}x</div>
                   <div className="text-xs text-muted-foreground mt-1">
                     Volume: {market.volume} SUI
                   </div>
+                  <div className="absolute inset-0 bg-primary/5 opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
-                <div className="rounded-lg border border-border bg-muted/50 p-4">
+                <div className="group relative overflow-hidden rounded-lg border-2 border-border bg-muted/50 p-4 transition-all hover:border-border hover:bg-muted/70 cursor-pointer">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingDown className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium text-muted-foreground">NO</span>
@@ -86,6 +87,7 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
                   <div className="text-xs text-muted-foreground mt-1">
                     Volume: {market.volume} SUI
                   </div>
+                  <div className="absolute inset-0 bg-muted/20 opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
               </div>
 

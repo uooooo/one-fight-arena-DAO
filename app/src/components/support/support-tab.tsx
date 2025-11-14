@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 import { Heart, TrendingUp, Users, Coins } from "lucide-react";
 
 interface Fighter {
@@ -99,12 +100,7 @@ export function SupportTab({ eventId, fighters }: SupportTabProps) {
                   <span className="text-muted-foreground">Progress</span>
                   <span className="font-medium">25%</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all"
-                    style={{ width: "25%" }}
-                  />
-                </div>
+                <Progress value={25} className="h-2" />
               </div>
 
               {/* Action Button */}
