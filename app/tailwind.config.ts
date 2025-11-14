@@ -49,8 +49,11 @@ const config: Config = {
           yellow: "rgb(249, 203, 0)",
           "gray-light": "rgb(60, 61, 66)",
           "gray-dark": "rgb(25, 26, 30)",
+          "gray-darker": "rgb(20, 21, 24)",
           "yellow-light": "rgb(255, 220, 50)",
           "yellow-dark": "rgb(200, 160, 0)",
+          white: "rgb(255, 255, 255)",
+          black: "rgb(0, 0, 0)",
         },
         chart: {
           "1": "hsl(var(--chart-1))",
