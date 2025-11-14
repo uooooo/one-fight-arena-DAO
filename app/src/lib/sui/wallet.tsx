@@ -30,7 +30,6 @@ export function SuiWalletProvider({ children }: { children: ReactNode }) {
         networks={networks} 
         autoConnect={false}
         enableUnsafeBurner={false}
-        preferredWallets={["Sui Wallet", "Suiet", "Ethos Wallet"]}
       >
         {children}
       </WalletKitProvider>
