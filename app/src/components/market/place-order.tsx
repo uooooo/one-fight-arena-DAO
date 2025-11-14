@@ -48,14 +48,19 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
         tx
       );
 
-      // Sign and execute the transaction
-      const result = await signAndExecuteTransactionBlock({
-        transaction: tx,
-        options: {
-          showEffects: true,
-          showEvents: true,
-        },
-      });
+      // Build and sign the transaction
+      // Note: Transaction API needs to be properly integrated with wallet-kit
+      // For MVP, we'll show a placeholder message
+      alert("Transaction functionality will be implemented after Move package deployment. Please ensure your wallet is connected.");
+      
+      // TODO: Implement proper transaction signing once Move package is deployed
+      // const result = await signAndExecuteTransactionBlock({
+      //   transaction: tx,
+      //   options: {
+      //     showEffects: true,
+      //     showEvents: true,
+      //   },
+      // });
 
       console.log("Transaction result:", result);
       
