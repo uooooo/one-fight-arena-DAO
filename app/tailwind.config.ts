@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  darkMode: ["class"],
+  darkMode: "class",
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -43,6 +43,15 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // ONE Championship brand colors
+        one: {
+          gray: "rgb(41, 42, 47)",
+          yellow: "rgb(249, 203, 0)",
+          "gray-light": "rgb(60, 61, 66)",
+          "gray-dark": "rgb(25, 26, 30)",
+          "yellow-light": "rgb(255, 220, 50)",
+          "yellow-dark": "rgb(200, 160, 0)",
+        },
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",
