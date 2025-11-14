@@ -14,10 +14,10 @@ export function createMarketTx(
   tx.moveCall({
     target: `${OPEN_CORNER_PACKAGE_ID}::markets::create_market`,
     arguments: [
-      eventId,
-      question,
-      500, // 5% fee in bps
-      vaultAddress,
+      tx.pure.string(eventId),
+      tx.pure.string(question),
+      tx.pure.u64(500), // 5% fee in bps
+      tx.pure.address(vaultAddress),
     ],
   });
 }
@@ -76,7 +76,7 @@ export function placeBetTx(
   tx: Transaction
 ) {
   // Split payment coin
-  const [coin] = tx.splitCoins(tx.gas, [quantity]);
+  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(quantity)]);
 
   // Place order on DeepBook
   placeLimitOrderTx(
@@ -92,7 +92,7 @@ export function placeBetTx(
   );
 
   // Transfer payment
-  tx.transferObjects([coin], poolId);
+  tx.transferObjects([coin], tx.pure.address(poolId));
 }
 
 /**
@@ -107,7 +107,7 @@ export function resolveMarketTx(
     target: `${OPEN_CORNER_PACKAGE_ID}::markets::resolve_market`,
     arguments: [
       tx.object(marketId),
-      result,
+      tx.pure.bool(result),
     ],
   });
 }

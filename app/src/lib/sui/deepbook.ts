@@ -33,10 +33,10 @@ export function createDeepBookPoolTx(
   tx.moveCall({
     target: `${DEEPBOOK_PACKAGE_ID_TESTNET}::clob_v2::create_pool`,
     arguments: [
-      params.baseCoinType,
-      params.quoteCoinType,
-      params.tickSize,
-      params.lotSize,
+      tx.pure.string(params.baseCoinType),
+      tx.pure.string(params.quoteCoinType),
+      tx.pure.u64(params.tickSize),
+      tx.pure.u64(params.lotSize),
     ],
   });
 }
@@ -52,11 +52,11 @@ export function placeLimitOrderTx(
     target: `${DEEPBOOK_PACKAGE_ID_TESTNET}::clob_v2::place_limit_order`,
     arguments: [
       tx.object(params.poolId),
-      params.price,
-      params.quantity,
-      params.isBid,
-      params.baseCoinType,
-      params.quoteCoinType,
+      tx.pure.u64(params.price),
+      tx.pure.u64(params.quantity),
+      tx.pure.bool(params.isBid),
+      tx.pure.string(params.baseCoinType),
+      tx.pure.string(params.quoteCoinType),
     ],
   });
 }
