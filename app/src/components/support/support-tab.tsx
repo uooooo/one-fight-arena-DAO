@@ -251,7 +251,6 @@ function SupportDialog({ vault, fighter }: SupportDialogProps) {
   );
 }
 
->>>>>>> origin/main
 export function SupportTab({ eventId, fighters }: SupportTabProps) {
   return (
     <div className="space-y-8">
