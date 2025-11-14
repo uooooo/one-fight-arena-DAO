@@ -85,8 +85,9 @@ function SupportDialog({ vault, fighter }: SupportDialogProps) {
   
   // Use actual vault ID from seed data
   // These IDs are updated from SEED_DATA.json after deployment
-  const vaultId = "0xf2d904e7e973775abfe2ac1faa45579c56106d6a57671a3a361f53256caeb335"; // From SEED_DATA.json
-  const fighterId = "0x7d916c939752027da9f47e711f1210d8d886643f30d7e2a868fe71ebf4c0c30f"; // From SEED_DATA.json
+  // Testnet IDs (update these after testnet deployment)
+  const vaultId = "0xcfa550799b47e4df67097c8675577317c794fe6a16361aedaba9dae560cc3ccf"; // From SEED_DATA.json (testnet)
+  const fighterId = "0x7f35a33fca3ed3e23b0f104cb1acc1f4b9aeaf7d28a50463d2ca705d7fbc2904"; // From SEED_DATA.json (testnet)
 
   const handleSupport = async () => {
     if (!currentAccount || !signAndExecuteTransactionBlock) {

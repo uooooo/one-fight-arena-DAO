@@ -83,5 +83,6 @@ Seed data will be saved to `SEED_DATA.json` in the project root.
 
 ## Package ID
 
-`0x7f8925011b3810f6c593e19aad48c5c9e5789de0395584bca356a79e2496868b` (local)
+- Local: `0xcebc6c273f2074f3208aa454f65fc2027aaab87ca9fe6122e693ce2d157c9563`
+- Testnet: `0xef78795a038b2743a2c20a0a2ab8c46f4c0b11dc277f9cf6e2587186b12798e6`
 

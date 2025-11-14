@@ -24,8 +24,8 @@
 - [x] `ProtocolAdminCap`の初期化関数追加（`init`関数）
 - [x] デプロイスクリプト作成（`scripts/deploy-package.ts`）
 - [x] シードスクリプト作成（`scripts/seed-data.ts`）
-- [ ] ローカルネットワークでのテスト
-- [ ] TestnetへのデプロイとパッケージIDの記録
+- [x] ローカルネットワークでのテスト
+- [x] TestnetへのデプロイとパッケージIDの記録（パッケージID: `0xef78795a038b2743a2c20a0a2ab8c46f4c0b11dc277f9cf6e2587186b12798e6`）
 
 ## Phase 2 - Frontend MVP 🚧 進行中
 
@@ -43,16 +43,19 @@
 - [x] ローカルネットワークへのデプロイ完了（パッケージID: `0x7f8925011b3810f6c593e19aad48c5c9e5789de0395584bca356a79e2496868b`）
 - [x] シードデータの作成完了（Fighter, Vault, Market）
 - [x] フロントエンドの動作確認完了（playwright-mcp使用）
-- [ ] 実際のMoveパッケージとのトランザクション実行テスト
+- [x] 実際のMoveパッケージとのトランザクション実行テスト（ローカル・Testnet両方）
+- [x] Testnetでのシードデータ作成完了
 
 ## 次のステップ
 
 1. ✅ デプロイスクリプトとシードスクリプトの作成完了
-2. Moveパッケージをローカルネットワークにデプロイ（`bun run scripts/deploy-package.ts local`）
-3. TestnetへのデプロイとパッケージIDの記録（`bun run scripts/deploy-package.ts testnet`）
-4. シードデータの作成（`bun run scripts/seed-data.ts <network> <package-id> <admin-cap-id>`）
-5. フロントエンドとMoveパッケージの統合（`.env.local`にパッケージIDを設定）
-6. 実際のトランザクション実行のテスト
+2. ✅ Moveパッケージをローカルネットワークにデプロイ完了
+3. ✅ TestnetへのデプロイとパッケージIDの記録完了（パッケージID: `0xef78795a038b2743a2c20a0a2ab8c46f4c0b11dc277f9cf6e2587186b12798e6`）
+4. ✅ Testnetでのシードデータ作成完了
+5. ✅ フロントエンドとMoveパッケージの統合完了
+6. ✅ 実際のトランザクション実行のテスト完了（ローカル・Testnet両方）
+7. 🔄 Testnetでのフロントエンド動作確認（`.env.local`にTestnetパッケージIDを設定）
+8. 🔄 Testnetでの統合テスト実行
 
 ## 注意事項
 
