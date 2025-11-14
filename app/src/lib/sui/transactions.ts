@@ -66,6 +66,14 @@ export function createMarketPoolTx(
 
 /**
  * Place a bet (buy YES or NO coins)
+ * @param poolId - DeepBook pool ID
+ * @param price - Price in SUI (will be converted to ticks)
+ * @param quantity - Quantity in SUI (will be converted to MIST)
+ * @param isYes - Whether buying YES (true) or NO (false)
+ * @param yesCoinType - YES coin type
+ * @param noCoinType - NO coin type
+ * @param paymentCoin - Payment coin (unused, using gas coin instead)
+ * @param tx - Transaction builder
  */
 export function placeBetTx(
   poolId: string,
@@ -77,15 +85,23 @@ export function placeBetTx(
   paymentCoin: any,
   tx: Transaction
 ) {
-  // Split payment coin
-  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(quantity)]);
+  // Convert SUI to MIST (1 SUI = 1,000,000,000 MIST)
+  const quantityMist = BigInt(Math.floor(parseFloat(quantity) * 1_000_000_000));
+  
+  // Convert price to ticks (DeepBook uses ticks, not decimal prices)
+  // Price is in SUI, but DeepBook needs ticks. Assuming 1 SUI = 1,000,000 ticks (as per DEFAULT_TICK_SIZE)
+  const priceTicks = BigInt(Math.floor(parseFloat(price) * 1_000_000));
+
+  // Split payment coin from gas
+  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(quantityMist)]);
 
   // Place order on DeepBook
+  // Note: DeepBook expects price and quantity in their native format (ticks and lot size)
   placeLimitOrderTx(
     {
       poolId,
-      price,
-      quantity,
+      price: priceTicks.toString(),
+      quantity: quantityMist.toString(),
       isBid: isYes,
       baseCoinType: isYes ? yesCoinType : noCoinType,
       quoteCoinType: "0x2::sui::SUI",
@@ -93,8 +109,8 @@ export function placeBetTx(
     tx
   );
 
-  // Transfer payment
-  tx.transferObjects([coin], tx.pure.address(poolId));
+  // The payment coin is consumed by DeepBook, so we don't need to transfer it manually
+  // DeepBook's place_limit_order will handle the payment
 }
 
 /**

@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { TrendingUp, TrendingDown, Coins, Clock, ArrowLeft } from "lucide-react";
 import { SimpleChart } from "@/components/market/simple-chart";
 import { useWalletKit } from "@mysten/wallet-kit";
+import { Transaction } from "@mysten/sui/transactions";
+import { placeBetTx } from "@/lib/sui/transactions";
+import { suiClient } from "@/lib/sui/client";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -28,6 +31,10 @@ const mockMarketData = {
   liquidity: 50000,
   status: "open" as const,
   eventName: "ONE Championship 165",
+  // Mock pool and coin types (these should come from actual market data)
+  poolId: "0x1234567890abcdef", // Mock pool ID - should be fetched from actual market
+  yesCoinType: "0x2::sui::SUI", // Mock - should be actual YES coin type from market
+  noCoinType: "0x2::sui::SUI", // Mock - should be actual NO coin type from market
   // Mock chart data
   chartData: [
     { time: "12:00", yes: 48, no: 52 },
@@ -41,7 +48,7 @@ const mockMarketData = {
 };
 
 export default function MarketPage({ params }: MarketPageProps) {
-  const { currentAccount } = useWalletKit();
+  const { signAndExecuteTransactionBlock, currentAccount } = useWalletKit();
   const [amount, setAmount] = useState("");
   const [selectedSide, setSelectedSide] = useState<"yes" | "no">("yes");
   const [selectedTimeframe, setSelectedTimeframe] = useState<"1H" | "6H" | "1D" | "1W" | "1M" | "ALL">("ALL");
@@ -50,21 +57,64 @@ export default function MarketPage({ params }: MarketPageProps) {
   const market = mockMarketData; // In real app, fetch by params.id
 
   const handleTrade = async (side: "yes" | "no") => {
-    if (!currentAccount || !amount) {
-      alert("Please connect wallet and enter amount");
+    if (!currentAccount || !amount || !signAndExecuteTransactionBlock) {
+      if (!currentAccount) {
+        alert("Please connect your wallet first.");
+      } else {
+        alert("Please enter an amount.");
+      }
       return;
     }
 
     setIsTrading(true);
     try {
-      // TODO: Implement actual DeepBook market order transaction
-      // For now, just show a message
-      alert(`Placing ${side.toUpperCase()} market order for ${amount} SUI...`);
+      const tx = new Transaction();
+
+      // Calculate price based on current market price
+      // For market orders, we use the current price (yesPrice or noPrice as percentage)
+      // Convert to SUI price (0.542 for 54.2%)
+      const priceInSui = side === "yes" 
+        ? (market.yesPrice / 100).toFixed(6)
+        : (market.noPrice / 100).toFixed(6);
+
+      // Place bet transaction
+      placeBetTx(
+        market.poolId,
+        priceInSui,
+        amount,
+        side === "yes",
+        market.yesCoinType,
+        market.noCoinType,
+        tx.gas,
+        tx
+      );
+
+      // Execute transaction
+      const result = await signAndExecuteTransactionBlock({
+        transaction: tx,
+        options: {
+          showEffects: true,
+          showEvents: true,
+          showObjectChanges: true,
+          showBalanceChanges: true,
+        },
+      });
+
+      console.log("Transaction result:", result);
+
+      // Wait for transaction to be indexed
+      await suiClient.waitForTransaction({
+        digest: result.digest,
+      });
+
+      alert(`Order placed successfully! Transaction: ${result.digest}`);
+      
       // Reset form
       setAmount("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Trade error:", error);
-      alert("Trade failed. Please try again.");
+      const errorMessage = error?.message || "Trade failed. Please try again.";
+      alert(errorMessage);
     } finally {
       setIsTrading(false);
     }
