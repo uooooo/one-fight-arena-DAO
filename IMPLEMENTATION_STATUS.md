@@ -21,6 +21,9 @@
   - [x] `markets.move` - 予測市場の作成・決済・償還
   - [x] `tests.move` - ユニットテスト
 - [x] Moveビルドエラー修正（Suiフレームワーク依存関係の調整完了）
+- [x] `ProtocolAdminCap`の初期化関数追加（`init`関数）
+- [x] デプロイスクリプト作成（`scripts/deploy-package.ts`）
+- [x] シードスクリプト作成（`scripts/seed-data.ts`）
 - [ ] ローカルネットワークでのテスト
 - [ ] TestnetへのデプロイとパッケージIDの記録
 
@@ -35,14 +38,21 @@
 - [x] Suiクライアント設定とヘルパー関数
 - [x] ONE Championshipブランドカラー適用（グレー、黄色）
 - [x] Atlassian Design System原則に基づくUI実装
-- [ ] 実際のMoveパッケージとの接続（パッケージデプロイ後）
+- [x] パッケージIDを環境変数から読み取る設定（`constants.ts`更新）
+- [x] Suiクライアントのローカルネットワーク対応（`client.ts`更新）
+- [x] ローカルネットワークへのデプロイ完了（パッケージID: `0x7f8925011b3810f6c593e19aad48c5c9e5789de0395584bca356a79e2496868b`）
+- [x] シードデータの作成完了（Fighter, Vault, Market）
+- [x] フロントエンドの動作確認完了（playwright-mcp使用）
+- [ ] 実際のMoveパッケージとのトランザクション実行テスト
 
 ## 次のステップ
 
-1. Moveパッケージをローカルネットワークにデプロイ
-2. TestnetへのデプロイとパッケージIDの記録
-3. フロントエンドとMoveパッケージの統合
-4. 実際のトランザクション実行のテスト
+1. ✅ デプロイスクリプトとシードスクリプトの作成完了
+2. Moveパッケージをローカルネットワークにデプロイ（`bun run scripts/deploy-package.ts local`）
+3. TestnetへのデプロイとパッケージIDの記録（`bun run scripts/deploy-package.ts testnet`）
+4. シードデータの作成（`bun run scripts/seed-data.ts <network> <package-id> <admin-cap-id>`）
+5. フロントエンドとMoveパッケージの統合（`.env.local`にパッケージIDを設定）
+6. 実際のトランザクション実行のテスト
 
 ## 注意事項
 

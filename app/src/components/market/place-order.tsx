@@ -28,7 +28,10 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handlePlaceOrder = async () => {
-    if (!currentAccount || !price || !quantity) {
+    if (!currentAccount || !price || !quantity || !signAndExecuteTransactionBlock) {
+      if (!currentAccount) {
+        alert("Please connect your wallet first.");
+      }
       return;
     }
 
@@ -48,49 +51,60 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
         tx
       );
 
-      // Build and sign the transaction
-      // Note: Transaction API needs to be properly integrated with wallet-kit
-      // For MVP, we'll show a placeholder message
-      alert("Transaction functionality will be implemented after Move package deployment. Please ensure your wallet is connected.");
-      
-      // TODO: Implement proper transaction signing once Move package is deployed
-      // const result = await signAndExecuteTransactionBlock({
-      //   transaction: tx,
-      //   options: {
-      //     showEffects: true,
-      //     showEvents: true,
-      //   },
-      // });
+      // Execute transaction
+      const result = await signAndExecuteTransactionBlock({
+        transaction: tx,
+        options: {
+          showEffects: true,
+          showEvents: true,
+          showObjectChanges: true,
+          showBalanceChanges: true,
+        },
+      });
 
-      // console.log("Transaction result:", result);
+      console.log("Transaction result:", result);
+      
+      // Wait for transaction to be indexed
+      await suiClient.waitForTransaction({
+        digest: result.digest,
+      });
+
+      alert(`Order placed successfully! Transaction: ${result.digest}`);
       
       // Reset form
       setPrice("");
       setQuantity("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error placing order:", error);
-      alert("Failed to place order. Please try again.");
+      const errorMessage = error?.message || "Failed to place order. Please try again.";
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Place Order</CardTitle>
-        <CardDescription>Buy YES or NO coins on DeepBook</CardDescription>
+    <Card className="border-border bg-card">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-base font-semibold">Place Order</CardTitle>
+        <CardDescription className="text-xs mt-1">Buy YES or NO coins on DeepBook</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         {/* Side Selection */}
         <Tabs value={side} onValueChange={(v) => setSide(v as "yes" | "no")}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="yes" className="gap-2">
-              <TrendingUp className="h-4 w-4" />
+          <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground w-full">
+            <TabsTrigger 
+              value="yes" 
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
               Buy YES
             </TabsTrigger>
-            <TabsTrigger value="no" className="gap-2">
-              <TrendingDown className="h-4 w-4" />
+            <TabsTrigger 
+              value="no" 
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+            >
+              <TrendingDown className="h-3.5 w-3.5" />
               Buy NO
             </TabsTrigger>
           </TabsList>
@@ -98,7 +112,7 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
 
         {/* Price Input */}
         <div className="space-y-2">
-          <Label htmlFor="price">Price (SUI)</Label>
+          <Label htmlFor="price" className="text-sm font-medium">Price (SUI)</Label>
           <Input
             id="price"
             type="number"
@@ -106,13 +120,13 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
             placeholder="0.00"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="text-lg"
+            className="h-10 text-base"
           />
         </div>
 
         {/* Quantity Input */}
         <div className="space-y-2">
-          <Label htmlFor="quantity">Quantity (SUI)</Label>
+          <Label htmlFor="quantity" className="text-sm font-medium">Quantity (SUI)</Label>
           <Input
             id="quantity"
             type="number"
@@ -120,22 +134,22 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
             placeholder="0.00"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            className="text-lg"
+            className="h-10 text-base"
           />
         </div>
 
         {/* Order Summary */}
         {price && quantity && (
-          <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-2">
+          <div className="rounded-md border border-border bg-muted/30 p-4 space-y-2.5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Side:</span>
-              <Badge variant={side === "yes" ? "default" : "secondary"}>
+              <Badge className={side === "yes" ? "bg-one-yellow/10 text-one-yellow border-one-yellow/20" : "bg-muted text-muted-foreground"}>
                 {side === "yes" ? "YES" : "NO"}
               </Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Total:</span>
-              <span className="font-medium">
+              <span className="font-semibold text-foreground">
                 {(parseFloat(price) * parseFloat(quantity)).toFixed(4)} SUI
               </span>
             </div>
@@ -146,15 +160,14 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
         <Button
           onClick={handlePlaceOrder}
           disabled={!currentAccount || !price || !quantity || isSubmitting}
-          className="w-full gap-2"
-          size="lg"
+          className="w-full gap-2 bg-one-yellow text-one-gray hover:bg-one-yellow-dark font-medium h-10"
         >
           {isSubmitting ? (
             "Processing..."
           ) : (
             <>
               Place {side === "yes" ? "YES" : "NO"} Order
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-3.5 w-3.5" />
             </>
           )}
         </Button>

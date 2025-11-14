@@ -1,8 +1,13 @@
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 
-// Initialize Sui client for Testnet
+// Get network from environment variable (default: testnet)
+const network = (process.env.NEXT_PUBLIC_SUI_NETWORK || "testnet") as "testnet" | "local";
+
+// Initialize Sui client
 export const suiClient = new SuiClient({
-  url: getFullnodeUrl("testnet"),
+  url: network === "local" 
+    ? "http://127.0.0.1:9000" 
+    : getFullnodeUrl("testnet"),
 });
 
 // Helper function to get object details

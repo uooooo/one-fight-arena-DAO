@@ -40,6 +40,16 @@ public struct ProtocolAdminCap has key {
     id: UID,
 }
 
+/// Initialize the protocol and create the admin capability
+/// This function is called automatically when the package is published
+/// The admin capability is transferred to the package publisher
+fun init(ctx: &mut TxContext) {
+    let admin_cap = ProtocolAdminCap {
+        id: object::new(ctx),
+    };
+    transfer::transfer(admin_cap, tx_context::sender(ctx));
+}
+
 /// Event emitted when a market is created
 public struct MarketCreated has copy, drop {
     market_id: ID,
@@ -181,6 +191,18 @@ public fun create_position(
     };
     
     transfer::transfer(position, tx_context::sender(ctx));
+}
+
+#[test_only]
+public fun create_test_admin_cap(ctx: &mut TxContext): ProtocolAdminCap {
+    ProtocolAdminCap {
+        id: object::new(ctx),
+    }
+}
+
+#[test_only]
+public fun transfer_admin_cap(admin_cap: ProtocolAdminCap, recipient: address) {
+    transfer::transfer(admin_cap, recipient);
 }
 
 #[test_only]

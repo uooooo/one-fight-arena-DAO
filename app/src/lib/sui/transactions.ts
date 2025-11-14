@@ -6,6 +6,7 @@ import { createDeepBookPoolTx, placeLimitOrderTx } from "./deepbook";
  * Create a prediction market with YES/NO coins
  */
 export function createMarketTx(
+  adminCapId: string,
   eventId: string,
   question: string,
   vaultAddress: string,
@@ -14,8 +15,9 @@ export function createMarketTx(
   tx.moveCall({
     target: `${OPEN_CORNER_PACKAGE_ID}::markets::create_market`,
     arguments: [
-      tx.pure.string(eventId),
-      tx.pure.string(question),
+      tx.object(adminCapId), // Admin capability
+      tx.pure.id(eventId),
+      tx.pure.vector("u8", Array.from(Buffer.from(question, "utf-8"))),
       tx.pure.u64(500), // 5% fee in bps
       tx.pure.address(vaultAddress),
     ],
@@ -100,6 +102,7 @@ export function placeBetTx(
  */
 export function resolveMarketTx(
   marketId: string,
+  adminCapId: string,
   result: boolean, // true = YES wins
   tx: Transaction
 ) {
@@ -107,6 +110,7 @@ export function resolveMarketTx(
     target: `${OPEN_CORNER_PACKAGE_ID}::markets::resolve_market`,
     arguments: [
       tx.object(marketId),
+      tx.object(adminCapId), // Admin capability
       tx.pure.bool(result),
     ],
   });
