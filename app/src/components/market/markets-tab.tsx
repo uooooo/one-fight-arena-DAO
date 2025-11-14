@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { OrderBook } from "./order-book";
+import { PlaceOrder } from "./place-order";
 
 interface MarketsTabProps {
   eventId: string;
@@ -19,6 +21,9 @@ const mockMarkets = [
     volume: 1250,
     liquidity: 5000,
     status: "open" as const,
+    poolId: "0x1234567890abcdef", // Mock pool ID
+    yesCoinType: "0x2::sui::SUI", // Mock coin types
+    noCoinType: "0x2::sui::SUI",
   },
   {
     id: "market-2",
@@ -28,6 +33,9 @@ const mockMarkets = [
     volume: 890,
     liquidity: 3500,
     status: "open" as const,
+    poolId: "0xabcdef1234567890",
+    yesCoinType: "0x2::sui::SUI",
+    noCoinType: "0x2::sui::SUI",
   },
 ];
 
@@ -43,66 +51,79 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
       </div>
 
       {/* Markets Grid */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="space-y-8">
         {mockMarkets.map((market) => (
-          <Card key={market.id} className="transition-all hover:shadow-lg">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <CardTitle className="text-lg pr-4">{market.question}</CardTitle>
-                <Badge variant={market.status === "open" ? "default" : "secondary"}>
-                  {market.status === "open" ? (
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      Open
-                    </span>
-                  ) : (
-                    "Resolved"
-                  )}
-                </Badge>
-              </div>
-              <CardDescription className="mt-2">
-                Market ID: {market.id}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Odds Display */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="group relative overflow-hidden rounded-lg border-2 border-primary/20 bg-muted/50 p-4 transition-all hover:border-primary/50 hover:bg-muted/70 cursor-pointer">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium text-muted-foreground">YES</span>
-                  </div>
-                  <div className="text-2xl font-bold text-primary">{market.yesOdds.toFixed(2)}x</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Volume: {market.volume} SUI
-                  </div>
-                  <div className="absolute inset-0 bg-primary/5 opacity-0 transition-opacity group-hover:opacity-100" />
+          <div key={market.id} id={`market-${market.id}`} className="scroll-mt-8">
+            {/* Market Summary Card */}
+            <Card className="mb-6 transition-all hover:shadow-lg">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-lg pr-4">{market.question}</CardTitle>
+                  <Badge variant={market.status === "open" ? "default" : "secondary"}>
+                    {market.status === "open" ? (
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Open
+                      </span>
+                    ) : (
+                      "Resolved"
+                    )}
+                  </Badge>
                 </div>
-                <div className="group relative overflow-hidden rounded-lg border-2 border-border bg-muted/50 p-4 transition-all hover:border-border hover:bg-muted/70 cursor-pointer">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingDown className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">NO</span>
+                <CardDescription className="mt-2">
+                  Market ID: {market.id}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Odds Display */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="group relative overflow-hidden rounded-lg border-2 border-primary/20 bg-muted/50 p-4 transition-all hover:border-primary/50 hover:bg-muted/70 cursor-pointer">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium text-muted-foreground">YES</span>
+                    </div>
+                    <div className="text-2xl font-bold text-primary">{market.yesOdds.toFixed(2)}x</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Volume: {market.volume} SUI
+                    </div>
+                    <div className="absolute inset-0 bg-primary/5 opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
-                  <div className="text-2xl font-bold">{market.noOdds.toFixed(2)}x</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Volume: {market.volume} SUI
+                  <div className="group relative overflow-hidden rounded-lg border-2 border-border bg-muted/50 p-4 transition-all hover:border-border hover:bg-muted/70 cursor-pointer">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingDown className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">NO</span>
+                    </div>
+                    <div className="text-2xl font-bold">{market.noOdds.toFixed(2)}x</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Volume: {market.volume} SUI
+                    </div>
+                    <div className="absolute inset-0 bg-muted/20 opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
-                  <div className="absolute inset-0 bg-muted/20 opacity-0 transition-opacity group-hover:opacity-100" />
                 </div>
-              </div>
 
-              {/* Market Stats */}
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total Liquidity:</span>
-                <span className="font-medium">{market.liquidity} SUI</span>
-              </div>
+                {/* Market Stats */}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Total Liquidity:</span>
+                  <span className="font-medium">{market.liquidity} SUI</span>
+                </div>
+              </CardContent>
+            </Card>
 
-              {/* Action Button */}
-              <Button className="w-full" variant="default">
-                View Order Book
-              </Button>
-            </CardContent>
-          </Card>
+            {/* Order Book and Place Order */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <OrderBook
+                poolId={market.poolId}
+                yesCoinType={market.yesCoinType}
+                noCoinType={market.noCoinType}
+              />
+              <PlaceOrder
+                poolId={market.poolId}
+                yesCoinType={market.yesCoinType}
+                noCoinType={market.noCoinType}
+                marketId={market.id}
+              />
+            </div>
+          </div>
         ))}
       </div>
 

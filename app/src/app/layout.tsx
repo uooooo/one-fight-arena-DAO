@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { SuiWalletProvider } from "@/lib/sui/wallet";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,11 +30,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-background flex flex-col`}
       >
-        <Navbar />
-        <div className="flex-1">
-          {children}
-        </div>
-        <Footer />
+        <SuiWalletProvider>
+          <Navbar />
+          <div className="flex-1">
+            {children}
+          </div>
+          <Footer />
+        </SuiWalletProvider>
       </body>
     </html>
   );
