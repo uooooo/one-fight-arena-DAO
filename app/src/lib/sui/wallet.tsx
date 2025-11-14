@@ -19,10 +19,7 @@ export function SuiWalletProvider({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletKitProvider 
-        autoConnect={false}
-        enableUnsafeBurner={false}
-      >
+      <WalletKitProvider>
         {children}
       </WalletKitProvider>
     </QueryClientProvider>
