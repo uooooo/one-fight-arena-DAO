@@ -47,10 +47,28 @@
    1. Create event + markets + initial liquidity via protected Move call (capability gating).
    2. Monitor markets, override or pause when needed, publish settlement proofs.
 
-## 6. Functional Requirements
+## 6. Experience Surfaces (Promotion vs Sponsorship)
+### 6.1 Fight Week Markets (Promotion Layer)
+- Primary route: `/event/[slug]?tab=markets` (default selection).
+- Hero shows event banner, countdown, fighter spotlight, and aggregated market stats (total liquidity, price movement).
+- Markets list grouped by storyline (Weigh-in, Press, Post-fight). Each card exposes odds, liquidity, and quick action button.
+- Drawer/side panel reveals owned PositionNFTs, cost basis, and quick redeem.
+- Inline explainer component clarifies “promotion externalization” narrative with links to docs.
+
+### 6.2 Support Vault (Sponsorship Layer)
+- Same route toggled via `Support` tab or `/event/[slug]?tab=support`.
+- Header reuses event hero but focuses on selected fighter(s) plus SupportVault balance + progress meter.
+- CTA stack: “Choose fighter” (carousel) → “Select Supporter NFT tier” → “Deposit / Claim Perks”.
+- Vault ledger shows most recent deposits, perk unlock milestones, and outbound usage (training camp, travel, etc.).
+- Supporter NFT collection grid renders minted tiers with metadata, share buttons, and “why it matters” copy block.
+
+The tab bar persists at the top of the event detail page so fans can flip contexts without losing scroll position; state syncing keeps wallet balances consistent across both layers.
+
+## 7. Functional Requirements
 ### F1. Event & Fighter Surfacing
 - List current Fight Week event(s) with countdowns and highlight fighters participating in MVP.
 - Each fighter card pulls from `FighterProfile` (on-chain) plus editorial metadata stored in JSON (Sanity-like or local file) for fallback.
+- Event detail page renders a two-tab interface (`Markets`, `Support`) so users can switch between Promotion/Sponsorship layers without leaving the route.
 - Support "Spotlight" slider for trending markets based on liquidity/volume metrics.
 
 ### F2. Wallet & Identity Layer
@@ -68,27 +86,18 @@
 - Market types: binary (YES/NO) with CPMM pricing; store `resolve_state`, `liquidity`, `fee_bps`.
 - Frontend features: order form with slippage warning, price chart, market odds card, share redemption modal.
 
-### F5. Admin Tools
-- Minimal operator dashboard route (`/admin`) hidden behind env flag + wallet list.
-- Actions: create market, seed liquidity, resolve market, pause market, craft SupportVault announcements.
-- Provide CLI script (Bun) for seeding objects from fixtures.
-
-### F6. Notifications & Content
-- Inline toast + email summary when market settles/Airdrop occurs.
-- Optionally, embed shareable OG image for each fighter vault state.
-
-### F7. Analytics & Telemetry
+### F5. Analytics & Telemetry
 - Client events (login, deposit, trade, redeem) batched to PostHog or simple server endpoint.
 - On-chain watchers via Sui GraphQL to sync vault totals for dashboards.
 
-## 7. Non-Functional Requirements
+## 8. Non-Functional Requirements
 - **Performance**: Largest interactive route < 200KB JS after code-splitting. Markets refresh every 5s via SWR/polling.
 - **Security**: Input validation on deposit sizes, signature domain separation, capability-guarded Move functions. Enforce Content Security Policy for wallet popups.
 - **Reliability**: Graceful fallback when RPC fails (retry, show stale data). Provide offline stub for demo.
 - **Accessibility**: Keyboard navigable, color contrast ≥ 4.5:1, localized copy strings file for EN/JA.
 - **Observability**: Server logs (pino), Move events indexed for debugging.
 
-## 8. On-Chain Design (Move)
+## 9. On-Chain Design (Move)
 - **Modules**: `open_corner::fighters`, `open_corner::support`, `open_corner::markets`.
 - **Objects**:
   - `FighterProfile { id, owner, bio_hash, socials, vault_cap }`
@@ -103,7 +112,7 @@
   - Fans interact permissionlessly with deposit/trade endpoints within guardrails.
 - **Events**: `FighterCreated`, `VaultDeposited`, `SupporterMinted`, `MarketTraded`, `MarketResolved`, `PayoutClaimed`.
 
-## 9. Application Architecture
+## 10. Application Architecture
 - **Client**: Next.js App Router, React Server Components for data fetching, client components for wallet interactions.
 - **Data layer**:
   - `lib/sui/client.ts` exports JSON-RPC + GraphQL clients (per Mysten TypeScript SDK docs).
@@ -113,7 +122,7 @@
 - **Styling/UI**: Tailwind + shadcn/ui components (Card, Tabs, Dialog, Toast, Skeleton).
 - **Testing**: Vitest + React Testing Library for UI; Move unit tests for modules; integration script that spins up local Sui network for e2e.
 
-## 10. Directory Layout (proposal)
+## 11. Directory Layout (proposal)
 ```
 .
 ├─ app/
@@ -134,8 +143,7 @@
 ├─ features/
 │  ├─ onboarding/
 │  ├─ markets/
-│  ├─ support-vault/
-│  └─ admin/
+│  └─ support-vault/
 ├─ lib/
 │  ├─ sui/
 │  │  ├─ client.ts
@@ -161,7 +169,7 @@
    └─ ui/ (optional shared lib if time allows)
 ```
 
-## 11. Delivery Milestones
+## 12. Delivery Milestones
 | Phase | Scope | Key Outputs |
 | --- | --- | --- |
 | **M0 – Environment (Day 0)** | Bun toolchain, Next.js baseline, shadcn setup, lint/test scaffolding | Repo bootstrapped, CI running lint/test | 
@@ -169,7 +177,7 @@
 | **M2 – Frontend MVP (Day 2)** | Wallet onboarding, fighter detail, market view, deposit/trade flows | Demo-ready UI with mocked data |
 | **M3 – Integration & Settlement (Day 3)** | Hook UI to live Sui package, settlement dashboard, analytics, polish | Storyboarded demo + walkthrough video |
 
-## 12. Future Extensions (Pitch Only)
+## 13. Future Extensions (Pitch Only)
 - PPV affiliate tracking via dynamic NFT passes.
 - AI-powered story prompts and scouting index overlays.
 - Native mobile experience + push notifications.
