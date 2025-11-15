@@ -46,8 +46,47 @@ export async function getMarket(marketId: string): Promise<MarketData | null> {
       const fields = object.data.content.fields as any;
       
       // Parse question from vector<u8>
-      const questionBytes = fields.question as number[];
-      const question = Buffer.from(questionBytes).toString("utf-8");
+      // Sui returns vector<u8> as an array of numbers (ASCII codes)
+      // The question may be stored as hex string bytes (e.g., "57696c6c..." as ASCII)
+      let question: string;
+      try {
+        const questionBytes = fields.question;
+        if (Array.isArray(questionBytes)) {
+          // Convert array of numbers to string first
+          const hexString = Buffer.from(questionBytes).toString("utf-8");
+          
+          // Check if the resulting string is a hex string (even length, only hex chars)
+          // and if it decodes to valid UTF-8
+          if (/^[0-9a-fA-F]+$/.test(hexString) && hexString.length % 2 === 0 && hexString.length > 0) {
+            try {
+              // Try to decode as hex string
+              const decoded = Buffer.from(hexString, "hex").toString("utf-8");
+              // If decoded string is readable (not just control chars), use it
+              if (decoded.length > 0 && !/^[\x00-\x1F\x7F]*$/.test(decoded)) {
+                question = decoded;
+              } else {
+                // Fallback: use the hex string as-is
+                question = hexString;
+              }
+            } catch {
+              // If hex decode fails, use the direct string conversion
+              question = hexString;
+            }
+          } else {
+            // Not a hex string, use directly as UTF-8
+            question = hexString;
+          }
+        } else if (typeof questionBytes === "string") {
+          // If it's already a string, use it directly
+          question = questionBytes;
+        } else {
+          // Fallback: try to convert to string directly
+          question = String(questionBytes || "");
+        }
+      } catch (error) {
+        console.error("Error decoding question field:", error, fields.question);
+        question = String(fields.question || "");
+      }
 
       // Parse state (0 = OPEN, 1 = RESOLVED)
       const state = fields.state === "0" || fields.state === 0 ? "open" : "resolved";
@@ -59,6 +98,24 @@ export async function getMarket(marketId: string): Promise<MarketData | null> {
         winningCoinType = Buffer.from(winningCoinBytes).toString("utf-8");
       }
 
+      // Parse pool_id (ID type is returned as a string or object with id field)
+      // Note: Older Market objects may not have pool_id if created before CPMM integration
+      let poolId: string | undefined;
+      if (fields.pool_id) {
+        if (typeof fields.pool_id === "string") {
+          poolId = fields.pool_id;
+        } else if (fields.pool_id && typeof fields.pool_id === "object" && fields.pool_id.id) {
+          // ID type has nested structure: { id: "0x..." }
+          poolId = fields.pool_id.id;
+        } else {
+          poolId = String(fields.pool_id);
+        }
+      } else {
+        // pool_id doesn't exist - this Market was created before CPMM integration
+        // We'll need to query MarketPool by market_id or check if it exists
+        console.warn("Market object does not have pool_id field. This may be an older Market created before CPMM integration.");
+      }
+
       return {
         id: marketId,
         eventId: fields.event_id || "",
@@ -67,7 +124,7 @@ export async function getMarket(marketId: string): Promise<MarketData | null> {
         feeBps: parseInt(fields.fee_bps || "500"),
         vaultAddress: fields.vault_address || "",
         winningCoinType,
-        poolId: fields.pool_id || undefined, // Pool ID for CPMM
+        poolId, // Pool ID for CPMM
       };
     }
 
