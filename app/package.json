@@ -2,11 +2,6 @@
   "name": "app",
   "version": "0.1.0",
   "private": true,
-  "vercel": {
-    "buildCommand": "bun run build",
-    "outputDirectory": ".next",
-    "installCommand": "bun install"
-  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
