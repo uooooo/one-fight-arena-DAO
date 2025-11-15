@@ -23,6 +23,10 @@ public struct MarketPool has key {
     k: u128, // Constant product (yes_balance * no_balance)
     /// Collateral: Locked USDO (1 USDO per YES1+NO1 pair)
     collateral: Balance<USDO>,
+    /// TreasuryCap for YES_COIN minting/burning (stored in pool for public access)
+    treasury_cap_yes: TreasuryCap<YES_COIN>,
+    /// TreasuryCap for NO_COIN minting/burning (stored in pool for public access)
+    treasury_cap_no: TreasuryCap<NO_COIN>,
 }
 
 /// Event emitted when USDO is split into YES/NO pair
@@ -76,11 +80,12 @@ const E_WRONG_MARKET: u64 = 5;
 
 /// Initialize market pool with empty state
 /// Creates an empty pool (yes_balance = 0, no_balance = 0, collateral = 0, k = 0)
+/// TreasuryCaps are stored in the pool for public access
 /// After initialization, users can call split_usdo to mint YES/NO and lock collateral
 /// Then LP can deposit YES/NO to provide liquidity to the pool
 /// 
 /// Flow:
-/// 1. Call init_market_pool to create empty pool
+/// 1. Call init_market_pool to create empty pool with TreasuryCaps
 /// 2. Users call split_usdo to mint YES/NO and lock collateral
 /// 3. LP calls deposit_liquidity to provide YES/NO to the pool for CPMM trading
 /// 
@@ -88,6 +93,8 @@ const E_WRONG_MARKET: u64 = 5;
 /// For use from transactions, use the entry wrapper function below.
 public fun init_market_pool(
     market_id: ID,
+    treasury_cap_yes: TreasuryCap<YES_COIN>,
+    treasury_cap_no: TreasuryCap<NO_COIN>,
     ctx: &mut TxContext,
 ): ID {
     let pool = MarketPool {
@@ -97,6 +104,8 @@ public fun init_market_pool(
         no_balance: balance::zero<NO_COIN>(),
         k: 0,
         collateral: balance::zero<USDO>(), // Start with 0 collateral
+        treasury_cap_yes,
+        treasury_cap_no,
     };
     
     let pool_id = object::id(&pool);
@@ -108,11 +117,15 @@ public fun init_market_pool(
 /// Entry function wrapper for init_market_pool
 /// This can be called from transactions, but does not return the pool_id.
 /// The pool_id must be obtained from transaction effects (objectChanges).
+/// NOTE: This entry function is deprecated. Use markets::create_market instead,
+/// which handles TreasuryCap transfer automatically.
 public entry fun init_market_pool_entry(
     market_id: ID,
+    treasury_cap_yes: TreasuryCap<YES_COIN>,
+    treasury_cap_no: TreasuryCap<NO_COIN>,
     ctx: &mut TxContext,
 ) {
-    let _pool_id = init_market_pool(market_id, ctx);
+    let _pool_id = init_market_pool(market_id, treasury_cap_yes, treasury_cap_no, ctx);
     // pool_id is returned by init_market_pool but we ignore it here
     // Transaction effects will contain the created MarketPool object
 }
@@ -129,8 +142,6 @@ public entry fun init_market_pool_entry(
 /// - In other words: N USDO (base units) → YES N (base units) + NO N (base units)
 public fun split_usdo(
     pool: &mut MarketPool,
-    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
-    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
     usdo_coin: Coin<USDO>,
     ctx: &mut TxContext,
 ): (MarketYes, MarketNo, Coin<YES_COIN>, Coin<NO_COIN>) {
@@ -141,31 +152,77 @@ public fun split_usdo(
     balance::join(&mut pool.collateral, coin::into_balance(usdo_coin));
     
     // Mint YES N + NO N (fixed 1:1 ratio, where N = usdo_amount in base units)
-    let yes_coin = coin::mint<YES_COIN>(treasury_cap_yes, usdo_amount, ctx);
-    let no_coin = coin::mint<NO_COIN>(treasury_cap_no, usdo_amount, ctx);
+    // TreasuryCaps are stored in the pool for public access
+    let mut yes_coin = coin::mint<YES_COIN>(&mut pool.treasury_cap_yes, usdo_amount, ctx);
+    let mut no_coin = coin::mint<NO_COIN>(&mut pool.treasury_cap_no, usdo_amount, ctx);
     
-    // Create market-specific wrappers to tag YES/NO with market_id
-    // This prevents cross-market attacks (redeeming YES from market A using market B's collateral)
-    let market_yes = MarketYes {
-        id: object::new(ctx),
-        market_id: pool.market_id,
-        amount: usdo_amount,
-    };
+    // If pool is empty (k == 0), add initial liquidity to enable CPMM trading
+    // This ensures the pool has liquidity for swaps immediately after first split
+    let yes_balance = balance::value(&pool.yes_balance);
+    let no_balance = balance::value(&pool.no_balance);
     
-    let market_no = MarketNo {
-        id: object::new(ctx),
-        market_id: pool.market_id,
-        amount: usdo_amount,
-    };
-    
-    event::emit(SplitUSDO {
-        pool_id: object::id(pool),
-        usdo_amount,
-        yes_amount: usdo_amount,
-        no_amount: usdo_amount,
-    });
-    
-    (market_yes, market_no, yes_coin, no_coin)
+    if (pool.k == 0 || yes_balance == 0 || no_balance == 0) {
+        // Pool is empty, add 50% of minted coins as initial liquidity
+        // This allows immediate CPMM trading while user keeps 50% of their position
+        let liquidity_amount = usdo_amount / 2; // 50% for liquidity
+        
+        // Split coins: half for liquidity, half for user
+        let yes_for_pool = coin::split(&mut yes_coin, liquidity_amount, ctx);
+        let no_for_pool = coin::split(&mut no_coin, liquidity_amount, ctx);
+        
+        // Add liquidity to pool
+        balance::join(&mut pool.yes_balance, coin::into_balance(yes_for_pool));
+        balance::join(&mut pool.no_balance, coin::into_balance(no_for_pool));
+        
+        // Update k (constant product)
+        let new_yes_balance = balance::value(&pool.yes_balance);
+        let new_no_balance = balance::value(&pool.no_balance);
+        pool.k = (new_yes_balance as u128) * (new_no_balance as u128);
+        
+        // User receives the remaining coins (yes_coin and no_coin now contain the other half)
+        let market_yes = MarketYes {
+            id: object::new(ctx),
+            market_id: pool.market_id,
+            amount: liquidity_amount, // User's share
+        };
+        
+        let market_no = MarketNo {
+            id: object::new(ctx),
+            market_id: pool.market_id,
+            amount: liquidity_amount, // User's share
+        };
+        
+        event::emit(SplitUSDO {
+            pool_id: object::id(pool),
+            usdo_amount,
+            yes_amount: liquidity_amount, // User's share
+            no_amount: liquidity_amount, // User's share
+        });
+        
+        (market_yes, market_no, yes_coin, no_coin)
+    } else {
+        // Pool already has liquidity, return all coins to user
+        let market_yes = MarketYes {
+            id: object::new(ctx),
+            market_id: pool.market_id,
+            amount: usdo_amount,
+        };
+        
+        let market_no = MarketNo {
+            id: object::new(ctx),
+            market_id: pool.market_id,
+            amount: usdo_amount,
+        };
+        
+        event::emit(SplitUSDO {
+            pool_id: object::id(pool),
+            usdo_amount,
+            yes_amount: usdo_amount,
+            no_amount: usdo_amount,
+        });
+        
+        (market_yes, market_no, yes_coin, no_coin)
+    }
 }
 
 /// Join YES1 + NO1 pair back into 1 USDO
@@ -177,8 +234,6 @@ public fun split_usdo(
 /// Market state management should be handled by markets.move module
 public fun join_coins(
     pool: &mut MarketPool,
-    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
-    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
     market_yes: MarketYes,
     market_no: MarketNo,
     yes_coin: Coin<YES_COIN>,
@@ -204,9 +259,9 @@ public fun join_coins(
     object::delete(yes_id);
     object::delete(no_id);
     
-    // Burn YES and NO
-    coin::burn(treasury_cap_yes, yes_coin);
-    coin::burn(treasury_cap_no, no_coin);
+    // Burn YES and NO (TreasuryCaps are stored in the pool)
+    coin::burn(&mut pool.treasury_cap_yes, yes_coin);
+    coin::burn(&mut pool.treasury_cap_no, no_coin);
     
     // Unlock USDO from collateral (1:1 exchange guaranteed)
     let usdo_balance = balance::split(&mut pool.collateral, yes_amount);
@@ -435,7 +490,6 @@ public fun get_no_price_normalized(pool: &MarketPool): u64 {
 /// Market state management should be handled by markets.move module
 public fun redeem_winning_yes_coins(
     pool: &mut MarketPool,
-    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
     market_yes: MarketYes,
     winning_coins: Coin<YES_COIN>,
     ctx: &mut TxContext,
@@ -451,8 +505,8 @@ public fun redeem_winning_yes_coins(
     let MarketYes { id, market_id: _, amount: _ } = market_yes;
     object::delete(id);
     
-    // Burn winning YES coins
-    coin::burn(treasury_cap_yes, winning_coins);
+    // Burn winning YES coins (TreasuryCap is stored in the pool)
+    coin::burn(&mut pool.treasury_cap_yes, winning_coins);
     
     // Pay out from collateral (1:1 exchange guaranteed)
     let collateral_balance = balance::split(&mut pool.collateral, coin_amount);
@@ -472,7 +526,6 @@ public fun redeem_winning_yes_coins(
 /// Market state management should be handled by markets.move module
 public fun redeem_winning_no_coins(
     pool: &mut MarketPool,
-    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
     market_no: MarketNo,
     winning_coins: Coin<NO_COIN>,
     ctx: &mut TxContext,
@@ -488,8 +541,8 @@ public fun redeem_winning_no_coins(
     let MarketNo { id, market_id: _, amount: _ } = market_no;
     object::delete(id);
     
-    // Burn winning NO coins
-    coin::burn(treasury_cap_no, winning_coins);
+    // Burn winning NO coins (TreasuryCap is stored in the pool)
+    coin::burn(&mut pool.treasury_cap_no, winning_coins);
     
     // Pay out from collateral (1:1 exchange guaranteed)
     let collateral_balance = balance::split(&mut pool.collateral, coin_amount);

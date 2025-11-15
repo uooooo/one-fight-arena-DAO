@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,46 @@ export default function MarketPage({ params }: MarketPageProps) {
   const [market, setMarket] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tradeMode, setTradeMode] = useState<"deepbook" | "cpmm">("cpmm"); // Default to CPMM
+
+  // Callback for pool data updates - must be defined at top level
+  const handlePoolDataUpdate = useCallback((poolData: any) => {
+    // Update chart data when pool data changes
+    if (poolData) {
+      const yesBalance = BigInt(poolData.yesBalance);
+      const noBalance = BigInt(poolData.noBalance);
+      const total = yesBalance + noBalance;
+      const yesOdds = total > 0 ? Number((yesBalance * BigInt(10000)) / total) / 100 : 50;
+      const noOdds = 100 - yesOdds;
+      
+      console.log("Updating chart with pool data:", {
+        yesBalance: yesBalance.toString(),
+        noBalance: noBalance.toString(),
+        yesOdds,
+        noOdds,
+      });
+      
+      // Add new data point to chart
+      const now = new Date();
+      const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+      
+      // Initialize chart data if it doesn't exist
+      setMarket((prevMarket) => {
+        if (!prevMarket) return prevMarket;
+        const currentChartData = prevMarket.chartData || [];
+        const newChartData = [
+          ...currentChartData,
+          { time: timeStr, yes: yesOdds, no: noOdds }
+        ].slice(-50); // Keep last 50 points
+        
+        return {
+          ...prevMarket,
+          yesPrice: yesOdds,
+          noPrice: noOdds,
+          chartData: newChartData,
+        };
+      });
+    }
+  }, []);
 
   // Fetch market data from Sui
   useEffect(() => {
@@ -99,20 +139,14 @@ export default function MarketPage({ params }: MarketPageProps) {
             treasuryCapNoId: seedData.treasuryCapNoId || SEED_DATA.treasuryCapNoId,
             treasuryCapUsdoId: seedData.treasuryCapUsdoId || SEED_DATA.treasuryCapUsdoId,
             // Mock prices and volume for now (will be replaced with actual CPMM data)
-            yesPrice: 54.2,
-            noPrice: 45.8,
+            yesPrice: 50,
+            noPrice: 50,
             volume: 12500,
             liquidity: 50000,
             eventName: "ONE Championship 173",
-            // Mock chart data
+            // Mock chart data - initialize with 50/50
             chartData: [
-              { time: "12:00", yes: 48, no: 52 },
-              { time: "13:00", yes: 50, no: 50 },
-              { time: "14:00", yes: 52, no: 48 },
-              { time: "15:00", yes: 51, no: 49 },
-              { time: "16:00", yes: 53, no: 47 },
-              { time: "17:00", yes: 54, no: 46 },
-              { time: "18:00", yes: 54.2, no: 45.8 },
+              { time: "00:00", yes: 50, no: 50 },
             ],
           });
         } else {
@@ -399,6 +433,7 @@ export default function MarketPage({ params }: MarketPageProps) {
                 usdoFaucetPackageId={market.usdoFaucetPackageId || SEED_DATA.usdoFaucetPackageId}
                 marketState={market.state}
                 winningCoinType={market.winningCoinType}
+                onPoolDataUpdate={handlePoolDataUpdate}
               />
             )}
 

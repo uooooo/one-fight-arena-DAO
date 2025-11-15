@@ -4,22 +4,39 @@ import { createDeepBookPoolTx, placeLimitOrderTx } from "./deepbook";
 
 /**
  * Create a prediction market with YES/NO coins
+ * TreasuryCaps are stored in MarketPool for public access
+ * @param adminCapId - ProtocolAdminCap ID
+ * @param eventId - Event ID
+ * @param question - Market question
+ * @param vaultAddress - Support vault address
+ * @param treasuryCapYesId - TreasuryCap<YES_COIN> ID (will be transferred to MarketPool)
+ * @param treasuryCapNoId - TreasuryCap<NO_COIN> ID (will be transferred to MarketPool)
+ * @param tx - Transaction builder
+ * @param packageId - Optional: override package ID
  */
 export function createMarketTx(
   adminCapId: string,
   eventId: string,
   question: string,
   vaultAddress: string,
-  tx: Transaction
+  treasuryCapYesId: string,
+  treasuryCapNoId: string,
+  tx: Transaction,
+  packageId?: string
 ) {
+  const targetPackageId = packageId || OPEN_CORNER_PACKAGE_ID;
+  const target = `${targetPackageId}::markets::create_market`;
+  
   tx.moveCall({
-    target: `${OPEN_CORNER_PACKAGE_ID}::markets::create_market`,
+    target,
     arguments: [
       tx.object(adminCapId), // Admin capability
       tx.pure.id(eventId),
       tx.pure.vector("u8", Array.from(Buffer.from(question, "utf-8"))),
       tx.pure.u64(500), // 5% fee in bps
       tx.pure.address(vaultAddress),
+      tx.object(treasuryCapYesId), // TreasuryCap<YES_COIN> (transferred to MarketPool)
+      tx.object(treasuryCapNoId), // TreasuryCap<NO_COIN> (transferred to MarketPool)
     ],
   });
 }
@@ -153,39 +170,48 @@ export function redeemWinningCoinsTx(
 
 /**
  * Split USDO into YES/NO pair using CPMM
+ * TreasuryCaps are stored in MarketPool for public access (new design)
  * @param marketId - Market ID
- * @param poolId - MarketPool ID
- * @param treasuryCapYesId - TreasuryCap<YES_COIN> ID
- * @param treasuryCapNoId - TreasuryCap<NO_COIN> ID
- * @param usdoCoinId - Coin<USDO> ID (or use tx.gas if USDO is gas)
+ * @param poolId - MarketPool ID (contains TreasuryCaps)
+ * @param usdoCoin - Coin<USDO> object (from tx.splitCoins or tx.gas)
  * @param tx - Transaction builder
+ * @param packageId - Optional: override package ID
  */
 export function splitUsdoForMarketTx(
   marketId: string,
   poolId: string,
-  treasuryCapYesId: string,
-  treasuryCapNoId: string,
-  usdoCoinId: string,
-  tx: Transaction
+  usdoCoin: any, // Coin<USDO> object from transaction
+  tx: Transaction,
+  packageId?: string // Optional: override package ID
 ) {
+  const targetPackageId = packageId || OPEN_CORNER_PACKAGE_ID;
+  const target = `${targetPackageId}::markets::split_usdo_for_market`;
+  
+  // Debug logging
+  console.log("🔍 splitUsdoForMarketTx - Debug info:", {
+    targetPackageId,
+    target,
+    marketId,
+    poolId,
+    hasUsdoCoin: !!usdoCoin,
+  });
+  
+  // TreasuryCaps are stored in MarketPool, so no need to pass them as arguments
   tx.moveCall({
-    target: `${OPEN_CORNER_PACKAGE_ID}::markets::split_usdo_for_market`,
+    target,
     arguments: [
       tx.object(marketId), // &Market
-      tx.object(poolId), // &mut MarketPool
-      tx.object(treasuryCapYesId), // &mut TreasuryCap<YES_COIN>
-      tx.object(treasuryCapNoId), // &mut TreasuryCap<NO_COIN>
-      tx.object(usdoCoinId), // Coin<USDO>
+      tx.object(poolId), // &mut MarketPool (contains TreasuryCaps)
+      usdoCoin, // Coin<USDO> (already a transaction result)
     ],
   });
 }
 
 /**
  * Join YES/NO pair back into USDO
+ * TreasuryCaps are stored in MarketPool, so no need to pass them as arguments
  * @param marketId - Market ID
  * @param poolId - MarketPool ID
- * @param treasuryCapYesId - TreasuryCap<YES_COIN> ID
- * @param treasuryCapNoId - TreasuryCap<NO_COIN> ID
  * @param marketYesId - MarketYes wrapper ID
  * @param marketNoId - MarketNo wrapper ID
  * @param yesCoinId - Coin<YES_COIN> ID
@@ -195,8 +221,6 @@ export function splitUsdoForMarketTx(
 export function joinCoinsForMarketTx(
   marketId: string,
   poolId: string,
-  treasuryCapYesId: string,
-  treasuryCapNoId: string,
   marketYesId: string,
   marketNoId: string,
   yesCoinId: string,
@@ -207,9 +231,7 @@ export function joinCoinsForMarketTx(
     target: `${OPEN_CORNER_PACKAGE_ID}::markets::join_coins_for_market`,
     arguments: [
       tx.object(marketId), // &Market
-      tx.object(poolId), // &mut MarketPool
-      tx.object(treasuryCapYesId), // &mut TreasuryCap<YES_COIN>
-      tx.object(treasuryCapNoId), // &mut TreasuryCap<NO_COIN>
+      tx.object(poolId), // &mut MarketPool (contains TreasuryCaps)
       tx.object(marketYesId), // MarketYes
       tx.object(marketNoId), // MarketNo
       tx.object(yesCoinId), // Coin<YES_COIN>
@@ -231,10 +253,20 @@ export function swapYesForNoTx(
   poolId: string,
   yesCoinId: string,
   minNoOut: bigint,
-  tx: Transaction
+  tx: Transaction,
+  packageId?: string
 ) {
+  const targetPackageId = packageId || OPEN_CORNER_PACKAGE_ID;
+  console.log("🔄 swapYesForNoTx - Swapping YES for NO:", {
+    marketId,
+    poolId,
+    yesCoinId,
+    minNoOut: minNoOut.toString(),
+    targetPackageId,
+    target: `${targetPackageId}::markets::swap_yes_for_no_for_market`,
+  });
   tx.moveCall({
-    target: `${OPEN_CORNER_PACKAGE_ID}::markets::swap_yes_for_no_for_market`,
+    target: `${targetPackageId}::markets::swap_yes_for_no_for_market`,
     arguments: [
       tx.object(marketId), // &Market
       tx.object(poolId), // &mut MarketPool
@@ -257,10 +289,20 @@ export function swapNoForYesTx(
   poolId: string,
   noCoinId: string,
   minYesOut: bigint,
-  tx: Transaction
+  tx: Transaction,
+  packageId?: string
 ) {
+  const targetPackageId = packageId || OPEN_CORNER_PACKAGE_ID;
+  console.log("🔄 swapNoForYesTx - Swapping NO for YES:", {
+    marketId,
+    poolId,
+    noCoinId,
+    minYesOut: minYesOut.toString(),
+    targetPackageId,
+    target: `${targetPackageId}::markets::swap_no_for_yes_for_market`,
+  });
   tx.moveCall({
-    target: `${OPEN_CORNER_PACKAGE_ID}::markets::swap_no_for_yes_for_market`,
+    target: `${targetPackageId}::markets::swap_no_for_yes_for_market`,
     arguments: [
       tx.object(marketId), // &Market
       tx.object(poolId), // &mut MarketPool
@@ -272,9 +314,9 @@ export function swapNoForYesTx(
 
 /**
  * Redeem winning YES coins for USDO
+ * TreasuryCap is stored in MarketPool, so no need to pass it as argument
  * @param marketId - Market ID
  * @param poolId - MarketPool ID
- * @param treasuryCapYesId - TreasuryCap<YES_COIN> ID
  * @param marketYesId - MarketYes wrapper ID
  * @param winningYesCoinId - Coin<YES_COIN> ID (winning coins to redeem)
  * @param tx - Transaction builder
@@ -282,7 +324,6 @@ export function swapNoForYesTx(
 export function redeemWinningYesTx(
   marketId: string,
   poolId: string,
-  treasuryCapYesId: string,
   marketYesId: string,
   winningYesCoinId: string,
   tx: Transaction
@@ -291,8 +332,7 @@ export function redeemWinningYesTx(
     target: `${OPEN_CORNER_PACKAGE_ID}::markets::redeem_winning_yes_for_market`,
     arguments: [
       tx.object(marketId), // &Market
-      tx.object(poolId), // &mut MarketPool
-      tx.object(treasuryCapYesId), // &mut TreasuryCap<YES_COIN>
+      tx.object(poolId), // &mut MarketPool (contains TreasuryCap)
       tx.object(marketYesId), // MarketYes
       tx.object(winningYesCoinId), // Coin<YES_COIN>
     ],
@@ -301,9 +341,9 @@ export function redeemWinningYesTx(
 
 /**
  * Redeem winning NO coins for USDO
+ * TreasuryCap is stored in MarketPool, so no need to pass it as argument
  * @param marketId - Market ID
  * @param poolId - MarketPool ID
- * @param treasuryCapNoId - TreasuryCap<NO_COIN> ID
  * @param marketNoId - MarketNo wrapper ID
  * @param winningNoCoinId - Coin<NO_COIN> ID (winning coins to redeem)
  * @param tx - Transaction builder
@@ -311,7 +351,6 @@ export function redeemWinningYesTx(
 export function redeemWinningNoTx(
   marketId: string,
   poolId: string,
-  treasuryCapNoId: string,
   marketNoId: string,
   winningNoCoinId: string,
   tx: Transaction
@@ -320,8 +359,7 @@ export function redeemWinningNoTx(
     target: `${OPEN_CORNER_PACKAGE_ID}::markets::redeem_winning_no_for_market`,
     arguments: [
       tx.object(marketId), // &Market
-      tx.object(poolId), // &mut MarketPool
-      tx.object(treasuryCapNoId), // &mut TreasuryCap<NO_COIN>
+      tx.object(poolId), // &mut MarketPool (contains TreasuryCap)
       tx.object(marketNoId), // MarketNo
       tx.object(winningNoCoinId), // Coin<NO_COIN>
     ],
@@ -367,6 +405,12 @@ export function claimUsdoFromFaucetTx(
   packageId?: string
 ) {
   const faucetPackageId = packageId || OPEN_CORNER_PACKAGE_ID;
+  console.log("🚰 claimUsdoFromFaucetTx - Claiming USDO:", {
+    faucetId,
+    amount: amount.toString(),
+    faucetPackageId,
+    target: `${faucetPackageId}::usdo_faucet::claim`,
+  });
   tx.moveCall({
     target: `${faucetPackageId}::usdo_faucet::claim`,
     arguments: [tx.object(faucetId), tx.pure.u64(amount)],

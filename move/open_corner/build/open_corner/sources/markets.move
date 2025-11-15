@@ -82,6 +82,7 @@ const E_INVALID_STATE: u64 = 2;
 
 /// Create a new prediction market
 /// Creates both Market and MarketPool
+/// TreasuryCaps are stored in MarketPool for public access
 /// Returns the market ID
 public fun create_market(
     admin_cap: &ProtocolAdminCap,
@@ -89,6 +90,8 @@ public fun create_market(
     question: vector<u8>,
     fee_bps: u64,
     vault_address: address,
+    treasury_cap_yes: TreasuryCap<YES_COIN>,
+    treasury_cap_no: TreasuryCap<NO_COIN>,
     ctx: &mut TxContext,
 ): ID {
     // Create Market ID first by creating a temporary object
@@ -96,9 +99,9 @@ public fun create_market(
     let market_id_uid = object::new(ctx);
     let market_id = market_id_uid.to_inner(); // Convert UID to ID
     
-    // Create MarketPool for CPMM trading (using market_id)
-    // Call init_market_pool which creates and returns the pool_id
-    let pool_id = market_pool::init_market_pool(market_id, ctx);
+    // Create MarketPool for CPMM trading (using market_id and TreasuryCaps)
+    // TreasuryCaps are stored in the pool for public access
+    let pool_id = market_pool::init_market_pool(market_id, treasury_cap_yes, treasury_cap_no, ctx);
     
     // Create Market with the actual pool_id
     let market = Market {
@@ -183,11 +186,10 @@ public fun create_position(
 
 /// Split USDO into YES/NO pair (with market state check)
 /// Only callable when market is OPEN
+/// TreasuryCaps are stored in MarketPool, so no need to pass them as arguments
 public entry fun split_usdo_for_market(
     market: &Market,
     pool: &mut MarketPool,
-    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
-    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
     usdo_coin: Coin<USDO>,
     ctx: &mut TxContext,
 ) {
@@ -196,11 +198,9 @@ public entry fun split_usdo_for_market(
     // Verify pool_id matches
     assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
     
-    // Call market_pool::split_usdo
+    // Call market_pool::split_usdo (TreasuryCaps are stored in the pool)
     let (market_yes, market_no, yes_coin, no_coin) = market_pool::split_usdo(
         pool,
-        treasury_cap_yes,
-        treasury_cap_no,
         usdo_coin,
         ctx,
     );
@@ -214,11 +214,10 @@ public entry fun split_usdo_for_market(
 
 /// Join YES/NO pair back into USDO (with market state check)
 /// Only callable when market is OPEN
+/// TreasuryCaps are stored in MarketPool, so no need to pass them as arguments
 public entry fun join_coins_for_market(
     market: &Market,
     pool: &mut MarketPool,
-    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
-    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
     market_yes: MarketYes,
     market_no: MarketNo,
     yes_coin: Coin<YES_COIN>,
@@ -230,11 +229,9 @@ public entry fun join_coins_for_market(
     // Verify pool_id matches
     assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
     
-    // Call market_pool::join_coins
+    // Call market_pool::join_coins (TreasuryCaps are stored in the pool)
     let usdo_coin = market_pool::join_coins(
         pool,
-        treasury_cap_yes,
-        treasury_cap_no,
         market_yes,
         market_no,
         yes_coin,
@@ -300,10 +297,10 @@ public entry fun swap_no_for_yes_for_market(
 
 /// Redeem winning YES coins (with market state check)
 /// Only callable when market is RESOLVED and YES is the winning outcome
+/// TreasuryCap is stored in MarketPool, so no need to pass it as argument
 public entry fun redeem_winning_yes_for_market(
     market: &Market,
     pool: &mut MarketPool,
-    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
     market_yes: MarketYes,
     winning_coins: Coin<YES_COIN>,
     ctx: &mut TxContext,
@@ -315,10 +312,9 @@ public entry fun redeem_winning_yes_for_market(
     // Verify YES is the winning outcome
     assert!(*option::borrow(&market.winning_coin_type) == b"YES_COIN", E_INVALID_STATE);
     
-    // Call market_pool::redeem_winning_yes_coins
+    // Call market_pool::redeem_winning_yes_coins (TreasuryCap is stored in the pool)
     let usdo_coin = market_pool::redeem_winning_yes_coins(
         pool,
-        treasury_cap_yes,
         market_yes,
         winning_coins,
         ctx,
@@ -330,10 +326,10 @@ public entry fun redeem_winning_yes_for_market(
 
 /// Redeem winning NO coins (with market state check)
 /// Only callable when market is RESOLVED and NO is the winning outcome
+/// TreasuryCap is stored in MarketPool, so no need to pass it as argument
 public entry fun redeem_winning_no_for_market(
     market: &Market,
     pool: &mut MarketPool,
-    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
     market_no: MarketNo,
     winning_coins: Coin<NO_COIN>,
     ctx: &mut TxContext,
@@ -345,10 +341,9 @@ public entry fun redeem_winning_no_for_market(
     // Verify NO is the winning outcome
     assert!(*option::borrow(&market.winning_coin_type) == b"NO_COIN", E_INVALID_STATE);
     
-    // Call market_pool::redeem_winning_no_coins
+    // Call market_pool::redeem_winning_no_coins (TreasuryCap is stored in the pool)
     let usdo_coin = market_pool::redeem_winning_no_coins(
         pool,
-        treasury_cap_no,
         market_no,
         winning_coins,
         ctx,
@@ -374,6 +369,8 @@ public fun transfer_admin_cap(admin_cap: ProtocolAdminCap, recipient: address) {
 public fun create_test_market(
     admin_cap: &ProtocolAdminCap,
     event_id: ID,
+    treasury_cap_yes: TreasuryCap<YES_COIN>,
+    treasury_cap_no: TreasuryCap<NO_COIN>,
     ctx: &mut TxContext,
 ): ID {
     create_market(
@@ -382,6 +379,8 @@ public fun create_test_market(
         b"Test Market",
         500, // 5% fee
         @0x0, // vault address
+        treasury_cap_yes,
+        treasury_cap_no,
         ctx,
     )
 }

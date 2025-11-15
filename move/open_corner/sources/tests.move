@@ -5,6 +5,8 @@ use sui::test_scenario;
 use open_corner::fighters;
 use open_corner::support;
 use open_corner::markets;
+use open_corner::yes_coin;
+use open_corner::no_coin;
 
 const ADMIN: address = @0xAD;
 const USER: address = @0x1;
@@ -53,9 +55,19 @@ fun test_create_market() {
     // Create admin cap
     let admin_cap = markets::create_test_admin_cap(test_scenario::ctx(&mut scenario));
     
+    // Create test TreasuryCaps
+    let treasury_cap_yes = yes_coin::create_test_treasury_cap(
+        test_scenario::ctx(&mut scenario),
+    );
+    let treasury_cap_no = no_coin::create_test_treasury_cap(
+        test_scenario::ctx(&mut scenario),
+    );
+    
     let market_id = markets::create_test_market(
         &admin_cap,
         sui::object::id_from_address(@0xE),
+        treasury_cap_yes,
+        treasury_cap_no,
         test_scenario::ctx(&mut scenario),
     );
     
@@ -76,9 +88,19 @@ fun test_resolve_market() {
     // Create admin cap
     let admin_cap = markets::create_test_admin_cap(test_scenario::ctx(&mut scenario));
     
+    // Create test TreasuryCaps
+    let treasury_cap_yes = yes_coin::create_test_treasury_cap(
+        test_scenario::ctx(&mut scenario),
+    );
+    let treasury_cap_no = no_coin::create_test_treasury_cap(
+        test_scenario::ctx(&mut scenario),
+    );
+    
     let market_id = markets::create_test_market(
         &admin_cap,
         sui::object::id_from_address(@0xE),
+        treasury_cap_yes,
+        treasury_cap_no,
         test_scenario::ctx(&mut scenario),
     );
     

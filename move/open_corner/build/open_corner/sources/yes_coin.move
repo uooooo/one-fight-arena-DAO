@@ -57,3 +57,11 @@ public fun create_yes_coin(
     treasury
 }
 
+#[test_only]
+/// Create test TreasuryCap for YES_COIN
+public fun create_test_treasury_cap(
+    ctx: &mut TxContext,
+): TreasuryCap<YES_COIN> {
+    create_yes_coin(YES_COIN {}, ctx)
+}
+

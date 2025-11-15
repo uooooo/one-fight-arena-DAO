@@ -78,12 +78,15 @@ try {
   console.log(gasOutput);
   
   if (network === "local" || network === "testnet") {
-    // Check if we have gas, request from faucet if needed
-    if (gasOutput.includes("No gas coins")) {
+    // Check if we have enough gas (need at least 0.2 SUI for package publication)
+    const hasEnoughGas = !gasOutput.includes("No gas coins") && 
+                         !gasOutput.match(/suiBalance.*0\.0[0-1]\d/);
+    
+    if (!hasEnoughGas || gasOutput.includes("No gas coins")) {
       console.log("Requesting SUI from faucet...");
       await $`sui client faucet`.quiet();
       // Wait a bit for faucet to process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       const newGasOutput = await $`sui client gas`.text();
       console.log(newGasOutput);
     }
@@ -97,11 +100,10 @@ try {
 // Step 5: Publish package
 console.log("📤 Publishing package...");
 try {
-  // Gas budget: 350 MIST = 0.35 SUI for package publication
+  // Gas budget: 300 MIST = 0.3 SUI for package publication
   // Sui package publication requires more gas than regular transactions
   // The gas cost depends on package size, number of modules, and network conditions
-  // Note: We're using a lower budget to work with available gas coins
-  const publishOutput = await $`cd ${packageDir} && sui client publish --gas-budget 350000000 .`.text();
+  const publishOutput = await $`cd ${packageDir} && sui client publish --gas-budget 300000000 .`.text();
   console.log(publishOutput);
   
   // Extract package ID from output

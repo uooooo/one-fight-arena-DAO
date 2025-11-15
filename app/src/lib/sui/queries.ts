@@ -335,10 +335,24 @@ export async function getMarketPool(poolId: string): Promise<MarketPoolData | nu
  */
 export async function getUsdoBalance(address: string, customCoinType?: string): Promise<bigint> {
   try {
+    // If customCoinType is provided, use it; otherwise construct from OPEN_CORNER_PACKAGE_ID
+    // Note: customCoinType should be passed from the component to ensure correct package ID
     const usdoCoinType = customCoinType || `${OPEN_CORNER_PACKAGE_ID}::usdo::USDO`;
+    
+    console.log("🔍 getUsdoBalance - Querying USDO balance:", {
+      address,
+      coinType: usdoCoinType,
+      hasCustomCoinType: !!customCoinType,
+    });
+    
     const coins = await suiClient.getCoins({
       owner: address,
       coinType: usdoCoinType,
+    });
+
+    console.log("💰 getUsdoBalance - Found coins:", {
+      count: coins.data.length,
+      coins: coins.data.map(c => ({ id: c.coinObjectId, balance: c.balance })),
     });
 
     let totalBalance = BigInt(0);
@@ -346,6 +360,7 @@ export async function getUsdoBalance(address: string, customCoinType?: string): 
       totalBalance += BigInt(coin.balance || "0");
     }
 
+    console.log("💰 getUsdoBalance - Total balance:", totalBalance.toString());
     return totalBalance;
   } catch (error) {
     console.error("Error fetching USDO balance:", error);

@@ -56,3 +56,11 @@ public fun create_no_coin(
     treasury
 }
 
+#[test_only]
+/// Create test TreasuryCap for NO_COIN
+public fun create_test_treasury_cap(
+    ctx: &mut TxContext,
+): TreasuryCap<NO_COIN> {
+    create_no_coin(NO_COIN {}, ctx)
+}
+

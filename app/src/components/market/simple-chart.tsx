@@ -19,8 +19,36 @@ export function SimpleChart({ data, selectedTimeframe }: SimpleChartProps) {
     return data.slice(-20); // Show last 20 points
   }, [data, selectedTimeframe]);
 
-  const maxValue = 100;
-  const minValue = 0;
+  // Calculate dynamic min/max based on data to make movements more visible
+  const { minValue, maxValue } = useMemo(() => {
+    if (chartData.length === 0) {
+      return { minValue: 0, maxValue: 100 };
+    }
+    
+    const allValues = chartData.flatMap(point => [point.yes, point.no]);
+    const dataMin = Math.min(...allValues);
+    const dataMax = Math.max(...allValues);
+    
+    // Add padding and ensure we show a wider range to make movements more visible
+    const padding = Math.max(10, (dataMax - dataMin) * 0.2); // 20% padding
+    const calculatedMin = Math.max(0, dataMin - padding);
+    const calculatedMax = Math.min(100, dataMax + padding);
+    
+    // If range is too small, use a centered range around 50%
+    if (calculatedMax - calculatedMin < 20) {
+      const center = (dataMin + dataMax) / 2;
+      return {
+        minValue: Math.max(0, center - 25),
+        maxValue: Math.min(100, center + 25),
+      };
+    }
+    
+    return {
+      minValue: calculatedMin,
+      maxValue: calculatedMax,
+    };
+  }, [chartData]);
+
   const chartHeight = 200;
   const chartWidth = 100; // percentage
 
@@ -86,11 +114,11 @@ export function SimpleChart({ data, selectedTimeframe }: SimpleChartProps) {
         />
       </svg>
 
-      {/* Y-axis labels */}
+      {/* Y-axis labels - dynamic based on min/max */}
       <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-muted-foreground px-1">
-        <span>100%</span>
-        <span>50%</span>
-        <span>0%</span>
+        <span>{maxValue.toFixed(1)}%</span>
+        <span>{((minValue + maxValue) / 2).toFixed(1)}%</span>
+        <span>{minValue.toFixed(1)}%</span>
       </div>
     </div>
   );
