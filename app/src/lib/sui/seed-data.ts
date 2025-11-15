@@ -10,6 +10,9 @@ export interface SeedData {
   poolId?: string;
   yesCoinType?: string;
   noCoinType?: string;
+  treasuryCapYesId?: string; // TreasuryCap<YES_COIN> ID
+  treasuryCapNoId?: string; // TreasuryCap<NO_COIN> ID
+  treasuryCapUsdoId?: string; // TreasuryCap<USDO> ID
   timestamp: string;
 }
 

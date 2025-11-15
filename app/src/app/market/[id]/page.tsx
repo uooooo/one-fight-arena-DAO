@@ -33,6 +33,7 @@ export default function MarketPage({ params }: MarketPageProps) {
   const [isTrading, setIsTrading] = useState(false);
   const [market, setMarket] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [tradeMode, setTradeMode] = useState<"deepbook" | "cpmm">("cpmm"); // Default to CPMM
 
   // Fetch market data from Sui
   useEffect(() => {
@@ -287,12 +288,42 @@ export default function MarketPage({ params }: MarketPageProps) {
           </div>
 
           {/* Right Column - Trading Panel */}
-          <div className="lg:col-span-1">
-            <Card className="border-border bg-card sticky top-20">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base font-semibold">Trade</CardTitle>
-                <CardDescription className="text-xs">Market orders via DeepBook</CardDescription>
+          <div className="lg:col-span-1 space-y-6">
+            {/* Trade Mode Selection */}
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Trading Mode</CardTitle>
+                <CardDescription className="text-xs">Choose your trading method</CardDescription>
               </CardHeader>
+              <CardContent>
+                <Tabs value={tradeMode} onValueChange={(v) => setTradeMode(v as "deepbook" | "cpmm")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="cpmm">CPMM</TabsTrigger>
+                    <TabsTrigger value="deepbook">DeepBook</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            {/* CPMM Trading Panel */}
+            {tradeMode === "cpmm" && market?.poolId && (
+              <CPMTrade
+                marketId={market.id}
+                poolId={market.poolId}
+                treasuryCapYesId={SEED_DATA.treasuryCapYesId || ""} // TODO: Get from package or market
+                treasuryCapNoId={SEED_DATA.treasuryCapNoId || ""} // TODO: Get from package or market
+                marketState={market.state}
+                winningCoinType={market.winningCoinType}
+              />
+            )}
+
+            {/* DeepBook Trading Panel */}
+            {tradeMode === "deepbook" && (
+              <Card className="border-border bg-card sticky top-20">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-base font-semibold">Trade</CardTitle>
+                  <CardDescription className="text-xs">Market orders via DeepBook</CardDescription>
+                </CardHeader>
               <CardContent className="space-y-5">
                 {/* Current Prices */}
                 <div className="space-y-3">
@@ -404,6 +435,7 @@ export default function MarketPage({ params }: MarketPageProps) {
                 </p>
               </CardContent>
             </Card>
+            )}
           </div>
         </div>
       </div>
