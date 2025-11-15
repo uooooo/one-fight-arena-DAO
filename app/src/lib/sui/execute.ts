@@ -12,14 +12,14 @@ import { OPEN_CORNER_PACKAGE_ID } from "./constants";
  */
 export async function executeTransaction(
   transaction: Transaction,
-  signAndExecuteTransaction: ReturnType<typeof useWalletKit>["signAndExecuteTransaction"]
+  signAndExecuteTransactionBlock: ReturnType<typeof useWalletKit>["signAndExecuteTransactionBlock"]
 ) {
-  if (!signAndExecuteTransaction) {
+  if (!signAndExecuteTransactionBlock) {
     throw new Error("Wallet not connected");
   }
 
-  const result = await signAndExecuteTransaction({
-    transaction,
+  const result = await signAndExecuteTransactionBlock({
+    transactionBlock: transaction as any,
     options: {
       showEffects: true,
       showEvents: true,

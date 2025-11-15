@@ -76,6 +76,7 @@ export function createMarketPoolTx(
       quoteCoinType: noCoinType,
       tickSize: "1000000",
       lotSize: "1000000",
+      minSize: "1000000",
     },
     tx
   );

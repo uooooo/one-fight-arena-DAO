@@ -18,11 +18,30 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CPMTrade } from "@/components/market/cpmm-trade";
+import { type MarketData } from "@/lib/sui/queries";
 
 interface MarketPageProps {
   params: Promise<{
     id: string;
   }>;
+}
+
+interface MarketWithChart extends MarketData {
+  poolId?: string;
+  packageId?: string;
+  usdoFaucetId?: string;
+  usdoFaucetPackageId?: string;
+  yesCoinType?: string;
+  noCoinType?: string;
+  treasuryCapYesId?: string;
+  treasuryCapNoId?: string;
+  treasuryCapUsdoId?: string;
+  yesPrice?: number;
+  noPrice?: number;
+  volume?: number;
+  liquidity?: number;
+  eventName?: string;
+  chartData?: Array<{ time: string; yes: number; no: number }>;
 }
 
 export default function MarketPage({ params }: MarketPageProps) {
@@ -34,7 +53,7 @@ export default function MarketPage({ params }: MarketPageProps) {
   const [selectedSide, setSelectedSide] = useState<"yes" | "no">("yes");
   const [selectedTimeframe, setSelectedTimeframe] = useState<"1H" | "6H" | "1D" | "1W" | "1M" | "ALL">("ALL");
   const [isTrading, setIsTrading] = useState(false);
-  const [market, setMarket] = useState<any>(null);
+  const [market, setMarket] = useState<MarketWithChart | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tradeMode, setTradeMode] = useState<"deepbook" | "cpmm">("cpmm"); // Default to CPMM
 
@@ -60,7 +79,7 @@ export default function MarketPage({ params }: MarketPageProps) {
       const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
       
       // Initialize chart data if it doesn't exist
-      setMarket((prevMarket) => {
+      setMarket((prevMarket: MarketWithChart | null) => {
         if (!prevMarket) return prevMarket;
         const currentChartData = prevMarket.chartData || [];
         const newChartData = [
@@ -94,7 +113,10 @@ export default function MarketPage({ params }: MarketPageProps) {
         // Check if marketIdFromParams is a valid Sui object ID (starts with 0x and is hex)
         if (!marketId || !marketId.startsWith("0x") || marketId.length < 10) {
           // Not a valid Sui object ID, use seedData.marketId
-          marketId = seedData.marketId || SEED_DATA.marketId;
+          const fallbackMarketId = seedData.marketId || SEED_DATA.marketId;
+          if (fallbackMarketId) {
+            marketId = fallbackMarketId;
+          }
         }
         
         if (!marketId) {
@@ -213,7 +235,7 @@ export default function MarketPage({ params }: MarketPageProps) {
 
       // Execute transaction
       const result = await signAndExecuteTransactionBlock({
-        transactionBlock: tx,
+        transactionBlock: tx as any,
         options: {
           showEffects: true,
           showEvents: true,
@@ -354,10 +376,10 @@ export default function MarketPage({ params }: MarketPageProps) {
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <Coins className="h-4 w-4" />
-                    <span>Vol: {(market.volume / 1000).toFixed(1)}K SUI</span>
+                    <span>Vol: {((market.volume || 0) / 1000).toFixed(1)}K SUI</span>
                   </div>
                   <span>•</span>
-                  <span>Liq: {(market.liquidity / 1000).toFixed(1)}K SUI</span>
+                  <span>Liq: {((market.liquidity || 0) / 1000).toFixed(1)}K SUI</span>
                 </div>
               </CardHeader>
             </Card>
@@ -393,7 +415,7 @@ export default function MarketPage({ params }: MarketPageProps) {
                     <span className="text-muted-foreground">No</span>
                   </div>
                 </div>
-                <SimpleChart data={market.chartData} selectedTimeframe={selectedTimeframe} />
+                <SimpleChart data={market.chartData || []} selectedTimeframe={selectedTimeframe} />
               </CardContent>
             </Card>
           </div>
@@ -471,8 +493,8 @@ export default function MarketPage({ params }: MarketPageProps) {
                         <span className="text-sm font-medium text-muted-foreground uppercase">Yes</span>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold text-one-yellow">{market.yesPrice.toFixed(1)}%</div>
-                        <div className="text-xs text-muted-foreground">{market.yesPrice.toFixed(2)}¢</div>
+                        <div className="text-xl font-bold text-one-yellow">{(market.yesPrice || 50).toFixed(1)}%</div>
+                        <div className="text-xs text-muted-foreground">{(market.yesPrice || 50).toFixed(2)}¢</div>
                       </div>
                     </div>
                   </div>
@@ -484,8 +506,8 @@ export default function MarketPage({ params }: MarketPageProps) {
                         <span className="text-sm font-medium text-muted-foreground uppercase">No</span>
                       </div>
                       <div className="text-right">
-                        <div className="text-xl font-bold text-foreground">{market.noPrice.toFixed(1)}%</div>
-                        <div className="text-xs text-muted-foreground">{market.noPrice.toFixed(2)}¢</div>
+                        <div className="text-xl font-bold text-foreground">{(market.noPrice || 50).toFixed(1)}%</div>
+                        <div className="text-xs text-muted-foreground">{(market.noPrice || 50).toFixed(2)}¢</div>
                       </div>
                     </div>
                   </div>

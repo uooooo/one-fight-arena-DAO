@@ -119,7 +119,7 @@ function SupportDialog({ vault, fighter }: SupportDialogProps) {
 
       // Execute transaction
       const result = await signAndExecuteTransactionBlock({
-        transactionBlock: tx,
+        transactionBlock: tx as any,
         options: {
           showEffects: true,
           showEvents: true,
