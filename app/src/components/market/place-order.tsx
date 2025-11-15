@@ -31,7 +31,32 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
     if (!currentAccount || !price || !quantity || !signAndExecuteTransactionBlock) {
       if (!currentAccount) {
         alert("Please connect your wallet first.");
+      } else if (!price || !quantity) {
+        alert("Please enter both price and quantity.");
       }
+      return;
+    }
+
+    // Validate pool and coin types
+    if (!poolId || !yesCoinType || !noCoinType) {
+      alert("This market is not ready for trading yet. DeepBook pool and YES/NO coins need to be created first.");
+      console.error("Missing market trading data:", {
+        poolId,
+        yesCoinType,
+        noCoinType,
+      });
+      return;
+    }
+
+    // Validate inputs
+    const priceNum = parseFloat(price);
+    const quantityNum = parseFloat(quantity);
+    if (isNaN(priceNum) || priceNum <= 0) {
+      alert("Please enter a valid price (greater than 0).");
+      return;
+    }
+    if (isNaN(quantityNum) || quantityNum <= 0) {
+      alert("Please enter a valid quantity (greater than 0).");
       return;
     }
 
@@ -159,7 +184,7 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
         {/* Submit Button */}
         <Button
           onClick={handlePlaceOrder}
-          disabled={!currentAccount || !price || !quantity || isSubmitting}
+          disabled={!currentAccount || !price || !quantity || isSubmitting || !poolId || !yesCoinType || !noCoinType}
           className="w-full gap-2 bg-one-yellow text-one-gray hover:bg-one-yellow-dark font-medium h-10"
         >
           {isSubmitting ? (
@@ -175,6 +200,12 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
         {!currentAccount && (
           <p className="text-xs text-muted-foreground text-center">
             Please connect your wallet to place orders
+          </p>
+        )}
+
+        {(!poolId || !yesCoinType || !noCoinType) && (
+          <p className="text-xs text-amber-500 text-center pt-2">
+            ⚠️ This market is not ready for trading. DeepBook pool needs to be created.
           </p>
         )}
       </CardContent>

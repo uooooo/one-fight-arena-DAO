@@ -94,8 +94,19 @@ export default function MarketPage({ params }: MarketPageProps) {
       return;
     }
 
-    if (!market || !market.poolId || !market.yesCoinType || !market.noCoinType) {
+    if (!market) {
       alert("Market data is not ready. Please wait for the market to load.");
+      return;
+    }
+
+    // Check if pool and coin types are available
+    if (!market.poolId || !market.yesCoinType || !market.noCoinType) {
+      alert("This market is not ready for trading yet. DeepBook pool and YES/NO coins need to be created first.");
+      console.error("Missing market trading data:", {
+        poolId: market.poolId,
+        yesCoinType: market.yesCoinType,
+        noCoinType: market.noCoinType,
+      });
       return;
     }
 
@@ -364,7 +375,7 @@ export default function MarketPage({ params }: MarketPageProps) {
                 {/* Trade Button */}
                 <Button
                   onClick={() => handleTrade(selectedSide)}
-                  disabled={!currentAccount || !amount || isTrading}
+                  disabled={!currentAccount || !amount || isTrading || !market?.poolId || !market?.yesCoinType || !market?.noCoinType}
                   className="w-full bg-one-yellow text-one-gray hover:bg-one-yellow-dark font-semibold h-11 text-base"
                 >
                   {isTrading ? (
@@ -373,6 +384,12 @@ export default function MarketPage({ params }: MarketPageProps) {
                     `Trade ${selectedSide.toUpperCase()}`
                   )}
                 </Button>
+
+                {(!market?.poolId || !market?.yesCoinType || !market?.noCoinType) && (
+                  <p className="text-xs text-muted-foreground text-center pt-2">
+                    ⚠️ This market is not ready for trading. DeepBook pool needs to be created.
+                  </p>
+                )}
 
                 {!currentAccount && (
                   <p className="text-xs text-muted-foreground text-center">
