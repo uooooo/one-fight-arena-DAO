@@ -1,45 +1,105 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Clock, Coins } from "lucide-react";
 import { OrderBook } from "./order-book";
 import { PlaceOrder } from "./place-order";
 import { cn } from "@/lib/utils";
+import { getMarketsByEvent, getMarket, type MarketData } from "@/lib/sui/queries";
+import { SEED_DATA } from "@/lib/sui/seed-data";
 
 interface MarketsTabProps {
   eventId: string;
 }
 
-// Mock market data
-const mockMarkets = [
-  {
-    id: "market-1",
-    question: "Will Fighter A win by KO/TKO?",
-    yesOdds: 1.85,
-    noOdds: 1.95,
-    volume: 1250,
-    liquidity: 5000,
-    status: "open" as const,
-    poolId: "0x1234567890abcdef", // Mock pool ID
-    yesCoinType: "0x2::sui::SUI", // Mock coin types
-    noCoinType: "0x2::sui::SUI",
-  },
-  {
-    id: "market-2",
-    question: "Will the fight go to decision?",
-    yesOdds: 2.1,
-    noOdds: 1.75,
-    volume: 890,
-    liquidity: 3500,
-    status: "open" as const,
-    poolId: "0xabcdef1234567890",
-    yesCoinType: "0x2::sui::SUI",
-    noCoinType: "0x2::sui::SUI",
-  },
-];
+interface MarketWithMetadata extends MarketData {
+  poolId?: string;
+  yesCoinType?: string;
+  noCoinType?: string;
+  yesOdds?: number;
+  noOdds?: number;
+  volume?: number;
+  liquidity?: number;
+}
 
 export function MarketsTab({ eventId }: MarketsTabProps) {
+  const [markets, setMarkets] = useState<MarketWithMetadata[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchMarkets() {
+      setIsLoading(true);
+      try {
+        // First, try to get markets from Sui by event
+        const suiMarkets = await getMarketsByEvent(eventId);
+
+        // If no markets found, use seed data as fallback
+        if (suiMarkets.length === 0 && SEED_DATA.marketId) {
+          const seedMarket = await getMarket(SEED_DATA.marketId);
+          if (seedMarket) {
+            suiMarkets.push(seedMarket);
+          }
+        }
+
+        // Enrich with metadata from SEED_DATA
+        const marketsWithMetadata: MarketWithMetadata[] = suiMarkets.map((market) => ({
+          ...market,
+          poolId: SEED_DATA.poolId,
+          yesCoinType: SEED_DATA.yesCoinType,
+          noCoinType: SEED_DATA.noCoinType,
+          // Mock odds and volume for now (will be replaced with actual DeepBook data)
+          yesOdds: 1.85,
+          noOdds: 1.95,
+          volume: 1250,
+          liquidity: 5000,
+        }));
+
+        setMarkets(marketsWithMetadata);
+      } catch (error) {
+        console.error("Error fetching markets:", error);
+        // Fallback to empty array or use SEED_DATA if available
+        if (SEED_DATA.marketId) {
+          setMarkets([
+            {
+              id: SEED_DATA.marketId,
+              eventId,
+              question: "Will Rodtang win?",
+              state: "open",
+              feeBps: 500,
+              vaultAddress: SEED_DATA.vaultId,
+              poolId: SEED_DATA.poolId,
+              yesCoinType: SEED_DATA.yesCoinType,
+              noCoinType: SEED_DATA.noCoinType,
+              yesOdds: 1.85,
+              noOdds: 1.95,
+              volume: 1250,
+              liquidity: 5000,
+            },
+          ]);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchMarkets();
+  }, [eventId]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">Prediction Markets</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Loading markets...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -52,7 +112,7 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
 
       {/* Markets List */}
       <div className="space-y-10">
-        {mockMarkets.map((market) => (
+        {markets.map((market) => (
           <div key={market.id} id={`market-${market.id}`} className="scroll-mt-8 space-y-6">
             {/* Market Header Card */}
             <Card className="border-border bg-card">
@@ -61,11 +121,11 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
                   <CardTitle className="text-lg font-semibold leading-tight pr-2">{market.question}</CardTitle>
                   <Badge className={cn(
                     "text-xs font-medium px-2 py-0.5 shrink-0",
-                    market.status === "open" 
+                    market.state === "open" 
                       ? "bg-one-yellow/10 text-one-yellow border-one-yellow/20" 
                       : "bg-muted text-muted-foreground"
                   )}>
-                    {market.status === "open" ? (
+                    {market.state === "open" ? (
                       <span className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3" />
                         Open
@@ -87,9 +147,11 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
                       <TrendingUp className="h-3.5 w-3.5 text-one-yellow" />
                       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">YES</span>
                     </div>
-                    <div className="text-2xl font-bold text-one-yellow mb-1">{market.yesOdds.toFixed(2)}x</div>
+                    <div className="text-2xl font-bold text-one-yellow mb-1">
+                      {market.yesOdds ? market.yesOdds.toFixed(2) + "x" : "N/A"}
+                    </div>
                     <div className="text-xs text-muted-foreground">
-                      Volume: <span className="font-medium">{market.volume.toLocaleString()}</span> SUI
+                      Volume: <span className="font-medium">{market.volume?.toLocaleString() || "0"}</span> SUI
                     </div>
                   </div>
                   <div className="group relative overflow-hidden rounded-md border-2 border-border bg-muted/30 p-4 transition-all hover:border-border hover:bg-muted/50">
@@ -97,9 +159,11 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
                       <TrendingDown className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">NO</span>
                     </div>
-                    <div className="text-2xl font-bold text-foreground mb-1">{market.noOdds.toFixed(2)}x</div>
+                    <div className="text-2xl font-bold text-foreground mb-1">
+                      {market.noOdds ? market.noOdds.toFixed(2) + "x" : "N/A"}
+                    </div>
                     <div className="text-xs text-muted-foreground">
-                      Volume: <span className="font-medium">{market.volume.toLocaleString()}</span> SUI
+                      Volume: <span className="font-medium">{market.volume?.toLocaleString() || "0"}</span> SUI
                     </div>
                   </div>
                 </div>
@@ -110,7 +174,7 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
                     <Coins className="h-4 w-4" />
                     <span>Total Liquidity</span>
                   </div>
-                  <span className="text-sm font-semibold text-foreground">{market.liquidity.toLocaleString()} SUI</span>
+                  <span className="text-sm font-semibold text-foreground">{market.liquidity?.toLocaleString() || "0"} SUI</span>
                 </div>
               </CardContent>
             </Card>
@@ -118,14 +182,14 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
             {/* Order Book and Place Order */}
             <div className="grid gap-6 lg:grid-cols-2">
               <OrderBook
-                poolId={market.poolId}
-                yesCoinType={market.yesCoinType}
-                noCoinType={market.noCoinType}
+                poolId={market.poolId || ""}
+                yesCoinType={market.yesCoinType || ""}
+                noCoinType={market.noCoinType || ""}
               />
               <PlaceOrder
-                poolId={market.poolId}
-                yesCoinType={market.yesCoinType}
-                noCoinType={market.noCoinType}
+                poolId={market.poolId || ""}
+                yesCoinType={market.yesCoinType || ""}
+                noCoinType={market.noCoinType || ""}
                 marketId={market.id}
               />
             </div>
@@ -134,7 +198,7 @@ export function MarketsTab({ eventId }: MarketsTabProps) {
       </div>
 
       {/* Empty State (if no markets) */}
-      {mockMarkets.length === 0 && (
+      {markets.length === 0 && (
         <Card className="border-border">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
