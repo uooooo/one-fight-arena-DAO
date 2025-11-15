@@ -5,8 +5,8 @@
   "fighterId": "0x7f35a33fca3ed3e23b0f104cb1acc1f4b9aeaf7d28a50463d2ca705d7fbc2904",
   "vaultId": "0xcfa550799b47e4df67097c8675577317c794fe6a16361aedaba9dae560cc3ccf",
   "marketId": "0x876c6432bb74ec286e815a864f69b57065eb0bf28a3878f1ba66a0efda90f048",
-  "poolId": null,
-  "yesCoinType": null,
-  "noCoinType": null,
-  "timestamp": "2025-11-14T23:46:08.115Z"
+  "poolId": "PLACEHOLDER_POOL_ID",
+  "yesCoinType": "0xef78795a038b2743a2c20a0a2ab8c46f4c0b11dc277f9cf6e2587186b12798e6::yes_coin::YES_COIN",
+  "noCoinType": "0xef78795a038b2743a2c20a0a2ab8c46f4c0b11dc277f9cf6e2587186b12798e6::no_coin::NO_COIN",
+  "timestamp": "2025-11-15T00:10:28.864Z"
 }
