@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ interface EventCardProps {
   fighterCount: number;
   marketCount: number;
   status: "upcoming" | "live" | "completed";
+  imageUrl?: string;
 }
 
 export function EventCard({
@@ -25,6 +27,7 @@ export function EventCard({
   fighterCount,
   marketCount,
   status,
+  imageUrl,
 }: EventCardProps) {
   const statusConfig = {
     upcoming: {
@@ -48,6 +51,18 @@ export function EventCard({
 
   return (
     <Card className="group transition-all hover:shadow-lg hover:border-one-yellow/30 border-border bg-[hsl(225,7%,32%)] hover:bg-[hsl(225,7%,35%)]">
+      {/* Event Image */}
+      {imageUrl && (
+        <div className="relative w-full h-48 overflow-hidden rounded-t-lg">
+          <Image
+            src={imageUrl}
+            alt={title}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[hsl(225,7%,32%)]/90 to-transparent pointer-events-none" />
+        </div>
+      )}
       <CardHeader className="pb-4">
         <div className="flex items-start justify-between gap-3 mb-3">
           <CardTitle className="text-lg font-semibold leading-tight pr-2">{title}</CardTitle>

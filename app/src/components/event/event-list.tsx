@@ -12,6 +12,7 @@ const mockEvents = [
     fighterCount: 20,
     marketCount: 6,
     status: "upcoming" as const,
+    imageUrl: "/images/one173/main-event.jpg",
   },
   {
     id: "one-172",
@@ -21,6 +22,7 @@ const mockEvents = [
     fighterCount: 16,
     marketCount: 5,
     status: "completed" as const,
+    imageUrl: "/images/one173/keyart.jpg",
   },
   {
     id: "one-174",
@@ -30,6 +32,7 @@ const mockEvents = [
     fighterCount: 0,
     marketCount: 0,
     status: "upcoming" as const,
+    imageUrl: "/images/one173/press-conference.jpg",
   },
 ];
 

@@ -16,6 +16,7 @@ interface MarketCardProps {
   status: "open" | "resolved";
   eventName?: string;
   imageUrl?: string;
+  imageUrls?: string[]; // For multiple fighter images
 }
 
 export function MarketCard({
@@ -28,36 +29,68 @@ export function MarketCard({
   status,
   eventName,
   imageUrl,
+  imageUrls,
 }: MarketCardProps) {
   const yesPercent = yesPrice;
   const noPercent = noPrice;
+  
+  // Use imageUrls if provided, otherwise fall back to imageUrl
+  const images = imageUrls && imageUrls.length > 0 ? imageUrls : (imageUrl ? [imageUrl] : []);
 
   return (
     <Link href={`/market/${id}`}>
       <Card className="group cursor-pointer transition-all hover:shadow-xl hover:border-one-yellow/50 border-border bg-[hsl(225,7%,32%)] hover:bg-[hsl(225,7%,35%)]">
         <CardContent className="p-0">
           {/* Image */}
-          {imageUrl ? (
+          {images.length > 0 ? (
             <div className="relative h-32 w-full overflow-hidden rounded-t-lg bg-muted">
-              <div className="relative w-full h-full">
-                <img
-                  src={imageUrl}
-                  alt={question}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  onError={(e) => {
-                    // Fallback if image fails to load
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const parent = target.parentElement;
-                    if (parent && !parent.querySelector('.fallback-icon')) {
-                      const fallback = document.createElement('div');
-                      fallback.className = 'fallback-icon absolute inset-0 flex items-center justify-center bg-gradient-to-br from-one-yellow/20 to-muted/30';
-                      fallback.innerHTML = '<svg class="h-8 w-8 text-one-yellow/50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>';
-                      parent.appendChild(fallback);
-                    }
-                  }}
-                />
-              </div>
+              {images.length === 1 ? (
+                // Single image
+                <div className="relative w-full h-full">
+                  <img
+                    src={images[0]}
+                    alt={question}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent && !parent.querySelector('.fallback-icon')) {
+                        const fallback = document.createElement('div');
+                        fallback.className = 'fallback-icon absolute inset-0 flex items-center justify-center bg-gradient-to-br from-one-yellow/20 to-muted/30';
+                        fallback.innerHTML = '<svg class="h-8 w-8 text-one-yellow/50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>';
+                        parent.appendChild(fallback);
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                // Two images side by side
+                <div className="relative w-full h-full flex">
+                  <div className="relative w-1/2 h-full overflow-hidden">
+                    <img
+                      src={images[0]}
+                      alt={question}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                  <div className="relative w-1/2 h-full overflow-hidden border-l border-border/50">
+                    <img
+                      src={images[1]}
+                      alt={question}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-[hsl(225,7%,32%)]/90 to-transparent pointer-events-none" />
             </div>
           ) : (
