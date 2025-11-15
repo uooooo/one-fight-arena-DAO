@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,9 @@ import { useWalletKit } from "@mysten/wallet-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { placeBetTx } from "@/lib/sui/transactions";
 import { suiClient } from "@/lib/sui/client";
+import { getMarket } from "@/lib/sui/queries";
+import { SEED_DATA } from "@/lib/sui/seed-data";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -21,40 +24,65 @@ interface MarketPageProps {
   };
 }
 
-// Mock market data
-const mockMarketData = {
-  id: "market-1",
-  question: "Will Fighter A win by KO/TKO?",
-  yesPrice: 54.2,
-  noPrice: 45.8,
-  volume: 12500,
-  liquidity: 50000,
-  status: "open" as const,
-  eventName: "ONE Championship 165",
-  // Mock pool and coin types (these should come from actual market data)
-  poolId: "0x1234567890abcdef", // Mock pool ID - should be fetched from actual market
-  yesCoinType: "0x2::sui::SUI", // Mock - should be actual YES coin type from market
-  noCoinType: "0x2::sui::SUI", // Mock - should be actual NO coin type from market
-  // Mock chart data
-  chartData: [
-    { time: "12:00", yes: 48, no: 52 },
-    { time: "13:00", yes: 50, no: 50 },
-    { time: "14:00", yes: 52, no: 48 },
-    { time: "15:00", yes: 51, no: 49 },
-    { time: "16:00", yes: 53, no: 47 },
-    { time: "17:00", yes: 54, no: 46 },
-    { time: "18:00", yes: 54.2, no: 45.8 },
-  ],
-};
-
 export default function MarketPage({ params }: MarketPageProps) {
   const { signAndExecuteTransactionBlock, currentAccount } = useWalletKit();
   const [amount, setAmount] = useState("");
   const [selectedSide, setSelectedSide] = useState<"yes" | "no">("yes");
   const [selectedTimeframe, setSelectedTimeframe] = useState<"1H" | "6H" | "1D" | "1W" | "1M" | "ALL">("ALL");
   const [isTrading, setIsTrading] = useState(false);
+  const [market, setMarket] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const market = mockMarketData; // In real app, fetch by params.id
+  // Fetch market data from Sui
+  useEffect(() => {
+    async function fetchMarket() {
+      setIsLoading(true);
+      try {
+        // Try to use params.id, fallback to SEED_DATA.marketId
+        const marketId = params.id || SEED_DATA.marketId;
+        if (!marketId) {
+          console.error("No market ID provided");
+          setIsLoading(false);
+          return;
+        }
+
+        const marketData = await getMarket(marketId);
+        if (marketData) {
+          // Enrich with metadata from SEED_DATA
+          setMarket({
+            ...marketData,
+            poolId: SEED_DATA.poolId || undefined,
+            yesCoinType: SEED_DATA.yesCoinType || undefined,
+            noCoinType: SEED_DATA.noCoinType || undefined,
+            // Mock prices and volume for now (will be replaced with actual DeepBook data)
+            yesPrice: 54.2,
+            noPrice: 45.8,
+            volume: 12500,
+            liquidity: 50000,
+            eventName: "ONE Championship 173",
+            // Mock chart data
+            chartData: [
+              { time: "12:00", yes: 48, no: 52 },
+              { time: "13:00", yes: 50, no: 50 },
+              { time: "14:00", yes: 52, no: 48 },
+              { time: "15:00", yes: 51, no: 49 },
+              { time: "16:00", yes: 53, no: 47 },
+              { time: "17:00", yes: 54, no: 46 },
+              { time: "18:00", yes: 54.2, no: 45.8 },
+            ],
+          });
+        } else {
+          console.error("Market not found:", marketId);
+        }
+      } catch (error) {
+        console.error("Error fetching market:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchMarket();
+  }, [params.id]);
 
   const handleTrade = async (side: "yes" | "no") => {
     if (!currentAccount || !amount || !signAndExecuteTransactionBlock) {
@@ -66,6 +94,11 @@ export default function MarketPage({ params }: MarketPageProps) {
       return;
     }
 
+    if (!market || !market.poolId || !market.yesCoinType || !market.noCoinType) {
+      alert("Market data is not ready. Please wait for the market to load.");
+      return;
+    }
+
     setIsTrading(true);
     try {
       const tx = new Transaction();
@@ -74,8 +107,8 @@ export default function MarketPage({ params }: MarketPageProps) {
       // For market orders, we use the current price (yesPrice or noPrice as percentage)
       // Convert to SUI price (0.542 for 54.2%)
       const priceInSui = side === "yes" 
-        ? (market.yesPrice / 100).toFixed(6)
-        : (market.noPrice / 100).toFixed(6);
+        ? ((market.yesPrice || 50) / 100).toFixed(6)
+        : ((market.noPrice || 50) / 100).toFixed(6);
 
       // Place bet transaction
       placeBetTx(
@@ -120,6 +153,41 @@ export default function MarketPage({ params }: MarketPageProps) {
     }
   };
 
+  if (isLoading) {
+    return (
+      <main className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <p className="text-muted-foreground">Loading market data...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!market) {
+    return (
+      <main className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <p className="text-muted-foreground">Market not found</p>
+              <Link 
+                href="/markets" 
+                className="inline-flex items-center gap-2 text-sm text-one-yellow hover:underline mt-4"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Markets
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6">
@@ -147,10 +215,15 @@ export default function MarketPage({ params }: MarketPageProps) {
                       {market.eventName}
                     </CardDescription>
                   </div>
-                  <Badge className="bg-one-yellow text-one-gray text-xs font-medium px-2.5 py-1">
+                  <Badge className={cn(
+                    "text-xs font-medium px-2.5 py-1",
+                    market.state === "open"
+                      ? "bg-one-yellow text-one-gray"
+                      : "bg-muted text-muted-foreground"
+                  )}>
                     <span className="flex items-center gap-1.5">
                       <Clock className="h-3 w-3" />
-                      Live
+                      {market.state === "open" ? "Live" : "Resolved"}
                     </span>
                   </Badge>
                 </div>
