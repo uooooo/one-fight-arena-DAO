@@ -23,6 +23,10 @@ import { fromB64 } from "@mysten/sui/utils";
 import { execSync } from "child_process";
 import { join } from "path";
 import { existsSync } from "fs";
+// Import from app/node_modules (Bun resolves from workspace root)
+import { createPermissionlessPool } from "../app/node_modules/@mysten/deepbook-v3/src/contracts/deepbook/pool.js";
+import { poolCreationFee } from "../app/node_modules/@mysten/deepbook-v3/src/contracts/deepbook/constants.js";
+import { testnetPackageIds, mainnetPackageIds, testnetCoins, mainnetCoins } from "../app/node_modules/@mysten/deepbook-v3/src/utils/constants.js";
 
 // Import decodeSuiPrivateKey if available
 let decodeSuiPrivateKey: ((key: string) => { secretKey: Uint8Array }) | null = null;
@@ -155,36 +159,214 @@ async function createCoinsAndPool() {
     console.log("🏊 Creating DeepBook pool...");
     
     // Note: DeepBook pool creation requires actual coin types
-    // For MVP demo, we'll create a pool with YES_COIN/NO_COIN types
-    // These coin types will be used once YES/NO coins are created
+    // YES/NO coins are already created via init functions
     
     // DeepBook pool creation using TransactionBuilder
     const tx = new Transaction();
     
-    // DeepBook package ID
-    const DEEPBOOK_PACKAGE_ID = "0x000000000000000000000000000000000000000000000000000000000000dee9";
+    // Use DeepBookV3 SDK - get correct package IDs based on network
+    // Note: Local network may not have DeepBookV3 deployed
+    // In that case, we'll need to use the old DeepBook package ID
+    let deepbookPackageIds;
+    if (network === "local") {
+      console.warn("⚠️  Local network detected. DeepBookV3 may not be deployed.");
+      console.warn("   Using placeholder IDs. Pool creation may fail.\n");
+      // Use testnet IDs as fallback (won't work on local, but structure is correct)
+      deepbookPackageIds = testnetPackageIds;
+    } else {
+      deepbookPackageIds = network === "testnet" ? testnetPackageIds : mainnetPackageIds;
+    }
+    const DEEPBOOK_PACKAGE_ID = deepbookPackageIds.DEEPBOOK_PACKAGE_ID;
+    const REGISTRY_ID = deepbookPackageIds.REGISTRY_ID;
     
-    // Coin types for YES/NO coins
-    // These types will be created when YES/NO coins are minted
+    console.log(`   ✅ Using DeepBookV3 SDK`);
+    console.log(`   Package ID: ${DEEPBOOK_PACKAGE_ID}`);
+    console.log(`   Registry ID: ${REGISTRY_ID}\n`);
+    
+    // Coin types for YES/NO coins (already created via init)
     const baseCoinType = `${packageId}::yes_coin::YES_COIN`;
     const quoteCoinType = `${packageId}::no_coin::NO_COIN`;
-    const tickSize = BigInt(1_000_000); // 1 SUI = 1,000,000 ticks
-    const lotSize = BigInt(1_000_000); // Minimum lot size
+    
+    // Calculate tick size and lot size based on coin decimals (both YES/NO coins have 9 decimals)
+    // For prediction market, we want 3 decimal precision (0.001)
+    // tickSize = 10^(9 - 9 + 9 - 3) = 10^6 = 1,000,000
+    const tickSize = BigInt(1_000_000);
+    
+    // Lot size should be approximately $0.01 to $0.10 nominal
+    // Assuming 1 SUI ≈ $1, lot size = 0.01 SUI = 10,000,000 MIST (0.01 * 10^9)
+    // But must be a power of 10 and >= 1,000, so we use 10,000,000 (10^7)
+    const lotSize = BigInt(10_000_000); // 0.01 SUI nominal
+    
+    // Min size should be approximately $0.10 to $1.00 nominal
+    // Must be a power of 10 and >= lot size, so we use 100,000,000 (10^8 = 0.1 SUI)
+    const minSize = BigInt(100_000_000); // 0.1 SUI nominal
     
     console.log(`   Base Coin Type: ${baseCoinType}`);
     console.log(`   Quote Coin Type: ${quoteCoinType}`);
     console.log(`   Tick Size: ${tickSize}`);
-    console.log(`   Lot Size: ${lotSize}\n`);
+    console.log(`   Lot Size: ${lotSize} (0.01 SUI)`);
+    console.log(`   Min Size: ${minSize} (0.1 SUI)\n`);
     
-    tx.moveCall({
-      target: `${DEEPBOOK_PACKAGE_ID}::clob_v2::create_pool`,
-      arguments: [
-        tx.pure.string(baseCoinType),
-        tx.pure.string(quoteCoinType),
-        tx.pure.u64(tickSize),
-        tx.pure.u64(lotSize),
-      ],
+    // Get DEEP coin for creation fee
+    // According to Move code: assert!(creation_fee.value() == constants::pool_creation_fee(), EInvalidFee);
+    // The exact amount from constants::pool_creation_fee() is required (cannot be waived)
+    // According to docs: "Creation fee is 500 DEEP tokens"
+    // However, on testnet/local, the constant value might be 0 or different
+    console.log("💰 Preparing creation fee...\n");
+    
+    // Get DEEP coin type and info from SDK constants
+    const deepCoinInfo = network === "testnet" || network === "local"
+      ? testnetCoins.DEEP
+      : mainnetCoins.DEEP;
+    const DEEP_COIN_TYPE = deepCoinInfo.type;
+    const DEEP_SCALAR = deepCoinInfo.scalar; // 1,000,000 for 6 decimals
+    
+    // Try to get the actual pool_creation_fee value from the chain
+    // This is the only way to know the exact required amount
+    let requiredFeeAmount: bigint;
+    try {
+      console.log("   Fetching pool_creation_fee from chain...");
+      const feeTx = new Transaction();
+      feeTx.add(poolCreationFee({ package: DEEPBOOK_PACKAGE_ID }));
+      const feeResult = await client.devInspectTransactionBlock({
+        sender: activeAddress,
+        transactionBlock: feeTx,
+      });
+      
+      // Extract the return value (should be a u64)
+      if (feeResult.results && feeResult.results[0] && feeResult.results[0].returnValues) {
+        const returnValue = feeResult.results[0].returnValues[0];
+        // Decode u64 from return value
+        const feeBytes = returnValue[0];
+        const feeValue = Buffer.from(feeBytes, 'base64');
+        // Convert little-endian bytes to BigInt
+        requiredFeeAmount = BigInt(feeValue.readUInt32LE(0)) + (BigInt(feeValue.readUInt32LE(4)) << BigInt(32));
+        console.log(`   ✅ Pool creation fee from chain: ${requiredFeeAmount} (${Number(requiredFeeAmount) / Number(DEEP_SCALAR)} DEEP tokens)\n`);
+      } else {
+        throw new Error("Could not get pool_creation_fee from chain");
+      }
+    } catch (error: any) {
+      console.warn(`   ⚠️  Could not fetch pool_creation_fee from chain: ${error.message}`);
+      console.warn(`   ⚠️  Using default value: 500 DEEP tokens (as per documentation)\n`);
+      // Fallback to documented value: 500 DEEP tokens
+      requiredFeeAmount = BigInt(500) * BigInt(DEEP_SCALAR); // 500 * 1,000,000 = 500,000,000
+    }
+    
+    let deepCoin: any = null;
+    
+    // If fee is 0, we still need to provide a Coin<DEEP> object (even with 0 value)
+    if (requiredFeeAmount === BigInt(0)) {
+      console.log(`   ✅ Creation fee is 0 on ${network} network - fee is waived!\n`);
+      // We still need to get/create a DEEP coin object, even with 0 value
+      // Try to get any DEEP coin, or create one with 0 balance
+      try {
+        const coins = await client.getCoins({
+          owner: activeAddress,
+          coinType: DEEP_COIN_TYPE,
+        });
+        
+        if (coins.data.length > 0) {
+          // Use the first DEEP coin (even with 0 balance, it's fine for a 0 fee)
+          deepCoin = tx.object(coins.data[0].coinObjectId);
+          console.log(`   ✅ Using existing DEEP coin (fee is 0, so amount doesn't matter)\n`);
+        } else {
+          throw new Error("No DEEP coins found, but fee is 0. Cannot create Coin<DEEP> object without coins.");
+        }
+      } catch (error: any) {
+        throw new Error(`Error getting DEEP coins for 0 fee: ${error.message}`);
+      }
+    } else {
+      // Fee is non-zero, need exact amount
+      console.log(`   Required fee: ${requiredFeeAmount} (${Number(requiredFeeAmount) / Number(DEEP_SCALAR)} DEEP tokens)\n`);
+      
+      try {
+        // Get all coins of DEEP type
+        const coins = await client.getCoins({
+          owner: activeAddress,
+          coinType: DEEP_COIN_TYPE,
+        });
+        
+        if (coins.data.length === 0) {
+          throw new Error(
+            `No DEEP coins found. Need ${Number(requiredFeeAmount) / Number(DEEP_SCALAR)} DEEP tokens. ` +
+            (network === "testnet" 
+              ? `On testnet, you may need to request DEEP from a faucet or swap for DEEP tokens.`
+              : `On mainnet, you can purchase DEEP tokens from a DEX.`)
+          );
+        }
+        
+        // Calculate total balance
+        const totalBalance = coins.data.reduce((sum, coin) => sum + BigInt(coin.balance), BigInt(0));
+        console.log(`   Total DEEP balance: ${totalBalance} (${Number(totalBalance) / Number(DEEP_SCALAR)} DEEP tokens)`);
+        
+        if (totalBalance < requiredFeeAmount) {
+          throw new Error(
+            `Insufficient DEEP balance: ${totalBalance} < ${requiredFeeAmount}. ` +
+            `Need ${Number(requiredFeeAmount) / Number(DEEP_SCALAR)} DEEP tokens. ` +
+            `Current balance: ${Number(totalBalance) / Number(DEEP_SCALAR)} DEEP tokens.`
+          );
+        }
+        
+        // Merge all DEEP coins if there are multiple
+        let mergedCoinId = coins.data[0].coinObjectId;
+        if (coins.data.length > 1) {
+          console.log(`   Merging ${coins.data.length} DEEP coins...`);
+          const mergeTx = new Transaction();
+          for (let i = 1; i < coins.data.length; i++) {
+            mergeTx.mergeCoins(
+              mergeTx.object(mergedCoinId),
+              mergeTx.object(coins.data[i].coinObjectId)
+            );
+          }
+          const mergeResult = await client.signAndExecuteTransaction({
+            signer,
+            transaction: mergeTx,
+            options: {
+              showEffects: true,
+              showObjectChanges: true,
+            },
+          });
+          await client.waitForTransaction({ digest: mergeResult.digest });
+          
+          // Get the updated coin
+          const updatedCoins = await client.getCoins({
+            owner: activeAddress,
+            coinType: DEEP_COIN_TYPE,
+          });
+          if (updatedCoins.data.length > 0) {
+            mergedCoinId = updatedCoins.data[0].coinObjectId;
+            console.log(`   ✅ Merged DEEP coins\n`);
+          }
+        }
+        
+        // Split the exact amount needed for the fee
+        const [feeCoin] = tx.splitCoins(tx.object(mergedCoinId), [requiredFeeAmount]);
+        deepCoin = feeCoin;
+        console.log(`   ✅ Prepared ${requiredFeeAmount} (${Number(requiredFeeAmount) / Number(DEEP_SCALAR)} DEEP tokens) for creation fee\n`);
+        
+      } catch (error: any) {
+        console.error(`   ❌ Error preparing DEEP fee: ${error.message}\n`);
+        throw error;
+      }
+    }
+    
+    // Use DeepBookV3 SDK's createPermissionlessPool function
+    console.log("🏊 Creating DeepBook pool using DeepBookV3 SDK...\n");
+    
+    const createPoolTx = createPermissionlessPool({
+      package: DEEPBOOK_PACKAGE_ID,
+      arguments: {
+        registry: REGISTRY_ID,
+        tickSize: tickSize,
+        lotSize: lotSize,
+        minSize: minSize,
+        creationFee: deepCoin,
+      },
+      typeArguments: [baseCoinType, quoteCoinType],
     });
+    
+    // Add the transaction to the transaction block
+    tx.add(createPoolTx);
     
     tx.setGasBudget(BigInt(100_000_000));
     
@@ -206,22 +388,45 @@ async function createCoinsAndPool() {
     await client.waitForTransaction({ digest: result.digest });
 
     // Extract pool ID from transaction result
+    // create_permissionless_pool returns ID (the pool ID as address)
     let poolId: string | null = null;
     
     // Debug: Print transaction result structure
     console.log("   Debug: Transaction result structure:");
     console.log(`   - objectChanges: ${result.objectChanges?.length || 0} changes`);
-    console.log(`   - effects?.created: ${result.effects?.created?.length || 0} objects\n`);
+    console.log(`   - effects?.created: ${result.effects?.created?.length || 0} objects`);
+    if (result.effects?.mutated) {
+      console.log(`   - effects?.mutated: ${result.effects.mutated.length} objects`);
+    }
     
-    // Method 1: Check objectChanges (most reliable)
-    if (result.objectChanges) {
-      console.log("   Checking objectChanges...");
+    // Check for PoolCreated event (DeepBookV3 emits this event)
+    if (result.events) {
+      console.log("\n   Checking events for PoolCreated...");
+      for (const event of result.events) {
+        if (event.type && event.type.includes("PoolCreated")) {
+          try {
+            const parsedJson = event.parsedJson as any;
+            if (parsedJson && parsedJson.pool_id) {
+              poolId = parsedJson.pool_id;
+              console.log(`   ✅ Found pool ID from PoolCreated event: ${poolId}`);
+              break;
+            }
+          } catch (error: any) {
+            console.warn(`     ⚠️  Could not parse PoolCreated event: ${error.message}`);
+          }
+        }
+      }
+    }
+    
+    // Method 1: Check objectChanges for created Pool objects
+    if (!poolId && result.objectChanges) {
+      console.log("\n   Checking objectChanges...");
       for (const change of result.objectChanges) {
         if (change.type === "created") {
           const objectType = change.objectType || "";
           console.log(`     - Created: ${change.objectId} (${objectType})`);
-          // DeepBook pool type format: "0x...::clob_v2::Pool<BaseType, QuoteType>"
-          if (objectType.includes("clob_v2::Pool") || objectType.includes("::Pool<")) {
+          // DeepBookV3 pool type format: "0x...::pool::Pool<BaseType, QuoteType>"
+          if (objectType.includes("pool::Pool") || objectType.includes("::Pool<")) {
             poolId = change.objectId;
             console.log(`   ✅ Found pool in objectChanges: ${poolId}`);
             break;

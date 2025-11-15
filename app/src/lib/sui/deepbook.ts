@@ -12,6 +12,7 @@ export interface CreatePoolParams {
   quoteCoinType: string;
   tickSize: string;
   lotSize: string;
+  minSize: string;
 }
 
 export interface PlaceOrderParams {
@@ -25,18 +26,23 @@ export interface PlaceOrderParams {
 
 /**
  * Create a DeepBook pool for YES/NO coin trading
+ * Uses pool::create_permissionless_pool as per DeepBookV3 documentation
+ * Note: Creation fee is 500 DEEP tokens (may not be required on testnet)
  */
 export function createDeepBookPoolTx(
   params: CreatePoolParams,
   tx: Transaction
 ) {
+  // Try pool::create_permissionless_pool (documented function)
+  // If this doesn't work, may need to use clob_v2::create_pool with different signature
   tx.moveCall({
-    target: `${DEEPBOOK_PACKAGE_ID_TESTNET}::clob_v2::create_pool`,
+    target: `${DEEPBOOK_PACKAGE_ID_TESTNET}::pool::create_permissionless_pool`,
     arguments: [
       tx.pure.string(params.baseCoinType),
       tx.pure.string(params.quoteCoinType),
       tx.pure.u64(params.tickSize),
       tx.pure.u64(params.lotSize),
+      tx.pure.u64(params.minSize),
     ],
   });
 }

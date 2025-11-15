@@ -10,6 +10,8 @@ use sui::transfer;
 use sui::tx_context::{Self, TxContext};
 use open_corner::yes_coin::{Self, YES_COIN};
 use open_corner::no_coin::{Self, NO_COIN};
+use open_corner::market_pool::{Self, MarketPool, MarketYes, MarketNo};
+use open_corner::usdo::USDO;
 
 /// Market states
 const OPEN: u8 = 0;
@@ -25,6 +27,8 @@ public struct Market has key {
     winning_coin_type: Option<vector<u8>>,
     fee_bps: u64, // fee in basis points (e.g., 500 = 5%)
     vault_address: address, // Address of the support vault
+    /// Pool ID for CPMM trading (MarketPool)
+    pool_id: ID,
 }
 
 /// Position NFT representing a bet
@@ -71,7 +75,13 @@ public struct PayoutClaimed has copy, drop {
     claimer: address,
 }
 
+/// Errors
+const E_MARKET_NOT_OPEN: u64 = 0;
+const E_MARKET_NOT_RESOLVED: u64 = 1;
+const E_INVALID_STATE: u64 = 2;
+
 /// Create a new prediction market
+/// Creates both Market and MarketPool
 /// Returns the market ID
 public fun create_market(
     admin_cap: &ProtocolAdminCap,
@@ -81,17 +91,26 @@ public fun create_market(
     vault_address: address,
     ctx: &mut TxContext,
 ): ID {
+    // Create Market ID first by creating a temporary object
+    // We'll create the market with a temporary pool_id and update it
+    let market_id_uid = object::new(ctx);
+    let market_id = market_id_uid.to_inner(); // Convert UID to ID
+    
+    // Create MarketPool for CPMM trading (using market_id)
+    let pool_id = market_pool::init_market_pool(market_id, ctx);
+    
+    // Create Market with the actual pool_id
     let market = Market {
-        id: object::new(ctx),
+        id: market_id_uid,
         event_id,
         question: *&question,
         state: OPEN,
         winning_coin_type: option::none(),
         fee_bps,
         vault_address,
+        pool_id,
     };
-
-    let market_id = object::id(&market);
+    
     transfer::share_object(market);
 
     event::emit(MarketCreated {
@@ -125,54 +144,19 @@ public fun resolve_market(
     });
 }
 
-/// Redeem winning coins for SUI (1:1 exchange)
-/// Note: This is a simplified version. In production, proper SUI pool management is needed.
-/// For MVP, this function burns winning coins and emits an event.
-/// Actual SUI distribution would need a treasury or DeepBook integration.
-public fun redeem_winning_coin<WinningCoinType>(
-    market: &Market,
-    mut winning_coins: Coin<WinningCoinType>,
-    ctx: &mut TxContext,
-) {
-    assert!(market.state == RESOLVED, 0);
-    
-    // For MVP, we simplify the coin type check
-    // In production, would use proper type checking
-    let coin_value = coin::value(&winning_coins);
+/// Check if market is in OPEN state
+public fun is_open(market: &Market): bool {
+    market.state == OPEN
+}
 
-    // Calculate fee (e.g., 5% = 500 bps)
-    let fee = (coin_value * market.fee_bps) / 10000;
-    
-    // Split coins: fee and remaining
-    let fee_coin = coin::split(&mut winning_coins, fee, ctx);
-    let remaining_coin = winning_coins;
+/// Check if market is in RESOLVED state
+public fun is_resolved(market: &Market): bool {
+    market.state == RESOLVED
+}
 
-    // Remaining amount to exchange (1:1 with SUI)
-    let sui_amount = coin::value(&remaining_coin);
-
-    // Burn the remaining winning coins
-    // For MVP, we use a simplified burn approach
-    // Note: In production, proper coin burning would be handled via TreasuryCap
-    // For now, we transfer the balance to a zero address (simplified for MVP)
-    let remaining_balance = coin::into_balance(remaining_coin);
-    transfer::public_transfer(coin::from_balance(remaining_balance, ctx), @0x0);
-
-    // TODO: In production, implement proper SUI pool management
-    // For MVP, we'll need to handle this differently - either:
-    // 1. Use a treasury that holds SUI for redemptions
-    // 2. Integrate with DeepBook for proper exchange
-    // For now, we burn the coins and emit an event
-    // The actual SUI distribution would happen off-chain or via a separate treasury function
-
-    // Transfer fee to vault (simplified for MVP)
-    transfer::public_transfer(fee_coin, market.vault_address);
-
-    event::emit(PayoutClaimed {
-        market_id: object::id(market),
-        position_id: object::id_from_address(tx_context::sender(ctx)),
-        amount: sui_amount,
-        claimer: tx_context::sender(ctx),
-    });
+/// Get pool ID for a market
+public fun get_pool_id(market: &Market): ID {
+    market.pool_id
 }
 
 /// Create position NFT (called when user places a bet)
@@ -191,6 +175,186 @@ public fun create_position(
     };
     
     transfer::transfer(position, tx_context::sender(ctx));
+}
+
+// ===== CPMM MarketPool Integration Functions =====
+// Entry functions that wrap market_pool functions with state checks
+
+/// Split USDO into YES/NO pair (with market state check)
+/// Only callable when market is OPEN
+public entry fun split_usdo_for_market(
+    market: &Market,
+    pool: &mut MarketPool,
+    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
+    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
+    usdo_coin: Coin<USDO>,
+    ctx: &mut TxContext,
+) {
+    // Verify market is OPEN
+    assert!(market.state == OPEN, E_MARKET_NOT_OPEN);
+    // Verify pool_id matches
+    assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
+    
+    // Call market_pool::split_usdo
+    let (market_yes, market_no, yes_coin, no_coin) = market_pool::split_usdo(
+        pool,
+        treasury_cap_yes,
+        treasury_cap_no,
+        usdo_coin,
+        ctx,
+    );
+    
+    // Transfer results to tx sender
+    transfer::public_transfer(market_yes, tx_context::sender(ctx));
+    transfer::public_transfer(market_no, tx_context::sender(ctx));
+    transfer::public_transfer(yes_coin, tx_context::sender(ctx));
+    transfer::public_transfer(no_coin, tx_context::sender(ctx));
+}
+
+/// Join YES/NO pair back into USDO (with market state check)
+/// Only callable when market is OPEN
+public entry fun join_coins_for_market(
+    market: &Market,
+    pool: &mut MarketPool,
+    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
+    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
+    market_yes: MarketYes,
+    market_no: MarketNo,
+    yes_coin: Coin<YES_COIN>,
+    no_coin: Coin<NO_COIN>,
+    ctx: &mut TxContext,
+) {
+    // Verify market is OPEN
+    assert!(market.state == OPEN, E_MARKET_NOT_OPEN);
+    // Verify pool_id matches
+    assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
+    
+    // Call market_pool::join_coins
+    let usdo_coin = market_pool::join_coins(
+        pool,
+        treasury_cap_yes,
+        treasury_cap_no,
+        market_yes,
+        market_no,
+        yes_coin,
+        no_coin,
+        ctx,
+    );
+    
+    // Transfer result to tx sender
+    transfer::public_transfer(usdo_coin, tx_context::sender(ctx));
+}
+
+/// Swap YES for NO (with market state check)
+/// Only callable when market is OPEN
+public entry fun swap_yes_for_no_for_market(
+    market: &Market,
+    pool: &mut MarketPool,
+    yes_coin: Coin<YES_COIN>,
+    min_no_out: u64,
+    ctx: &mut TxContext,
+) {
+    // Verify market is OPEN
+    assert!(market.state == OPEN, E_MARKET_NOT_OPEN);
+    // Verify pool_id matches
+    assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
+    
+    // Call market_pool::swap_yes_for_no
+    let no_coin = market_pool::swap_yes_for_no(
+        pool,
+        yes_coin,
+        min_no_out,
+        ctx,
+    );
+    
+    // Transfer result to tx sender
+    transfer::public_transfer(no_coin, tx_context::sender(ctx));
+}
+
+/// Swap NO for YES (with market state check)
+/// Only callable when market is OPEN
+public entry fun swap_no_for_yes_for_market(
+    market: &Market,
+    pool: &mut MarketPool,
+    no_coin: Coin<NO_COIN>,
+    min_yes_out: u64,
+    ctx: &mut TxContext,
+) {
+    // Verify market is OPEN
+    assert!(market.state == OPEN, E_MARKET_NOT_OPEN);
+    // Verify pool_id matches
+    assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
+    
+    // Call market_pool::swap_no_for_yes
+    let yes_coin = market_pool::swap_no_for_yes(
+        pool,
+        no_coin,
+        min_yes_out,
+        ctx,
+    );
+    
+    // Transfer result to tx sender
+    transfer::public_transfer(yes_coin, tx_context::sender(ctx));
+}
+
+/// Redeem winning YES coins (with market state check)
+/// Only callable when market is RESOLVED and YES is the winning outcome
+public entry fun redeem_winning_yes_for_market(
+    market: &Market,
+    pool: &mut MarketPool,
+    treasury_cap_yes: &mut TreasuryCap<YES_COIN>,
+    market_yes: MarketYes,
+    winning_coins: Coin<YES_COIN>,
+    ctx: &mut TxContext,
+) {
+    // Verify market is RESOLVED
+    assert!(market.state == RESOLVED, E_MARKET_NOT_RESOLVED);
+    // Verify pool_id matches
+    assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
+    // Verify YES is the winning outcome
+    assert!(*option::borrow(&market.winning_coin_type) == b"YES_COIN", E_INVALID_STATE);
+    
+    // Call market_pool::redeem_winning_yes_coins
+    let usdo_coin = market_pool::redeem_winning_yes_coins(
+        pool,
+        treasury_cap_yes,
+        market_yes,
+        winning_coins,
+        ctx,
+    );
+    
+    // Transfer result to tx sender
+    transfer::public_transfer(usdo_coin, tx_context::sender(ctx));
+}
+
+/// Redeem winning NO coins (with market state check)
+/// Only callable when market is RESOLVED and NO is the winning outcome
+public entry fun redeem_winning_no_for_market(
+    market: &Market,
+    pool: &mut MarketPool,
+    treasury_cap_no: &mut TreasuryCap<NO_COIN>,
+    market_no: MarketNo,
+    winning_coins: Coin<NO_COIN>,
+    ctx: &mut TxContext,
+) {
+    // Verify market is RESOLVED
+    assert!(market.state == RESOLVED, E_MARKET_NOT_RESOLVED);
+    // Verify pool_id matches
+    assert!(market.pool_id == object::id(pool), E_INVALID_STATE);
+    // Verify NO is the winning outcome
+    assert!(*option::borrow(&market.winning_coin_type) == b"NO_COIN", E_INVALID_STATE);
+    
+    // Call market_pool::redeem_winning_no_coins
+    let usdo_coin = market_pool::redeem_winning_no_coins(
+        pool,
+        treasury_cap_no,
+        market_no,
+        winning_coins,
+        ctx,
+    );
+    
+    // Transfer result to tx sender
+    transfer::public_transfer(usdo_coin, tx_context::sender(ctx));
 }
 
 #[test_only]

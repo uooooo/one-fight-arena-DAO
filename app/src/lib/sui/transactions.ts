@@ -149,3 +149,182 @@ export function redeemWinningCoinsTx(
   });
 }
 
+// ===== CPMM Market Pool Functions =====
+
+/**
+ * Split USDO into YES/NO pair using CPMM
+ * @param marketId - Market ID
+ * @param poolId - MarketPool ID
+ * @param treasuryCapYesId - TreasuryCap<YES_COIN> ID
+ * @param treasuryCapNoId - TreasuryCap<NO_COIN> ID
+ * @param usdoCoinId - Coin<USDO> ID (or use tx.gas if USDO is gas)
+ * @param tx - Transaction builder
+ */
+export function splitUsdoForMarketTx(
+  marketId: string,
+  poolId: string,
+  treasuryCapYesId: string,
+  treasuryCapNoId: string,
+  usdoCoinId: string,
+  tx: Transaction
+) {
+  tx.moveCall({
+    target: `${OPEN_CORNER_PACKAGE_ID}::markets::split_usdo_for_market`,
+    arguments: [
+      tx.object(marketId), // &Market
+      tx.object(poolId), // &mut MarketPool
+      tx.object(treasuryCapYesId), // &mut TreasuryCap<YES_COIN>
+      tx.object(treasuryCapNoId), // &mut TreasuryCap<NO_COIN>
+      tx.object(usdoCoinId), // Coin<USDO>
+    ],
+  });
+}
+
+/**
+ * Join YES/NO pair back into USDO
+ * @param marketId - Market ID
+ * @param poolId - MarketPool ID
+ * @param treasuryCapYesId - TreasuryCap<YES_COIN> ID
+ * @param treasuryCapNoId - TreasuryCap<NO_COIN> ID
+ * @param marketYesId - MarketYes wrapper ID
+ * @param marketNoId - MarketNo wrapper ID
+ * @param yesCoinId - Coin<YES_COIN> ID
+ * @param noCoinId - Coin<NO_COIN> ID
+ * @param tx - Transaction builder
+ */
+export function joinCoinsForMarketTx(
+  marketId: string,
+  poolId: string,
+  treasuryCapYesId: string,
+  treasuryCapNoId: string,
+  marketYesId: string,
+  marketNoId: string,
+  yesCoinId: string,
+  noCoinId: string,
+  tx: Transaction
+) {
+  tx.moveCall({
+    target: `${OPEN_CORNER_PACKAGE_ID}::markets::join_coins_for_market`,
+    arguments: [
+      tx.object(marketId), // &Market
+      tx.object(poolId), // &mut MarketPool
+      tx.object(treasuryCapYesId), // &mut TreasuryCap<YES_COIN>
+      tx.object(treasuryCapNoId), // &mut TreasuryCap<NO_COIN>
+      tx.object(marketYesId), // MarketYes
+      tx.object(marketNoId), // MarketNo
+      tx.object(yesCoinId), // Coin<YES_COIN>
+      tx.object(noCoinId), // Coin<NO_COIN>
+    ],
+  });
+}
+
+/**
+ * Swap YES for NO using CPMM
+ * @param marketId - Market ID
+ * @param poolId - MarketPool ID
+ * @param yesCoinId - Coin<YES_COIN> ID to swap
+ * @param minNoOut - Minimum NO coins to receive (slippage protection)
+ * @param tx - Transaction builder
+ */
+export function swapYesForNoTx(
+  marketId: string,
+  poolId: string,
+  yesCoinId: string,
+  minNoOut: bigint,
+  tx: Transaction
+) {
+  tx.moveCall({
+    target: `${OPEN_CORNER_PACKAGE_ID}::markets::swap_yes_for_no_for_market`,
+    arguments: [
+      tx.object(marketId), // &Market
+      tx.object(poolId), // &mut MarketPool
+      tx.object(yesCoinId), // Coin<YES_COIN>
+      tx.pure.u64(minNoOut), // u64 (minimum NO output)
+    ],
+  });
+}
+
+/**
+ * Swap NO for YES using CPMM
+ * @param marketId - Market ID
+ * @param poolId - MarketPool ID
+ * @param noCoinId - Coin<NO_COIN> ID to swap
+ * @param minYesOut - Minimum YES coins to receive (slippage protection)
+ * @param tx - Transaction builder
+ */
+export function swapNoForYesTx(
+  marketId: string,
+  poolId: string,
+  noCoinId: string,
+  minYesOut: bigint,
+  tx: Transaction
+) {
+  tx.moveCall({
+    target: `${OPEN_CORNER_PACKAGE_ID}::markets::swap_no_for_yes_for_market`,
+    arguments: [
+      tx.object(marketId), // &Market
+      tx.object(poolId), // &mut MarketPool
+      tx.object(noCoinId), // Coin<NO_COIN>
+      tx.pure.u64(minYesOut), // u64 (minimum YES output)
+    ],
+  });
+}
+
+/**
+ * Redeem winning YES coins for USDO
+ * @param marketId - Market ID
+ * @param poolId - MarketPool ID
+ * @param treasuryCapYesId - TreasuryCap<YES_COIN> ID
+ * @param marketYesId - MarketYes wrapper ID
+ * @param winningYesCoinId - Coin<YES_COIN> ID (winning coins to redeem)
+ * @param tx - Transaction builder
+ */
+export function redeemWinningYesTx(
+  marketId: string,
+  poolId: string,
+  treasuryCapYesId: string,
+  marketYesId: string,
+  winningYesCoinId: string,
+  tx: Transaction
+) {
+  tx.moveCall({
+    target: `${OPEN_CORNER_PACKAGE_ID}::markets::redeem_winning_yes_for_market`,
+    arguments: [
+      tx.object(marketId), // &Market
+      tx.object(poolId), // &mut MarketPool
+      tx.object(treasuryCapYesId), // &mut TreasuryCap<YES_COIN>
+      tx.object(marketYesId), // MarketYes
+      tx.object(winningYesCoinId), // Coin<YES_COIN>
+    ],
+  });
+}
+
+/**
+ * Redeem winning NO coins for USDO
+ * @param marketId - Market ID
+ * @param poolId - MarketPool ID
+ * @param treasuryCapNoId - TreasuryCap<NO_COIN> ID
+ * @param marketNoId - MarketNo wrapper ID
+ * @param winningNoCoinId - Coin<NO_COIN> ID (winning coins to redeem)
+ * @param tx - Transaction builder
+ */
+export function redeemWinningNoTx(
+  marketId: string,
+  poolId: string,
+  treasuryCapNoId: string,
+  marketNoId: string,
+  winningNoCoinId: string,
+  tx: Transaction
+) {
+  tx.moveCall({
+    target: `${OPEN_CORNER_PACKAGE_ID}::markets::redeem_winning_no_for_market`,
+    arguments: [
+      tx.object(marketId), // &Market
+      tx.object(poolId), // &mut MarketPool
+      tx.object(treasuryCapNoId), // &mut TreasuryCap<NO_COIN>
+      tx.object(marketNoId), // MarketNo
+      tx.object(winningNoCoinId), // Coin<NO_COIN>
+    ],
+  });
+}
+

@@ -13,6 +13,19 @@ export interface MarketData {
   feeBps: number;
   vaultAddress: string;
   winningCoinType?: string;
+  poolId?: string; // MarketPool ID for CPMM trading
+}
+
+/**
+ * MarketPool data structure from Sui
+ */
+export interface MarketPoolData {
+  id: string;
+  marketId: string;
+  yesBalance: string; // Balance of YES coins
+  noBalance: string; // Balance of NO coins
+  k: string; // Constant product (yes_balance * no_balance)
+  collateral: string; // Locked USDO collateral
 }
 
 /**
@@ -54,6 +67,7 @@ export async function getMarket(marketId: string): Promise<MarketData | null> {
         feeBps: parseInt(fields.fee_bps || "500"),
         vaultAddress: fields.vault_address || "",
         winningCoinType,
+        poolId: fields.pool_id || undefined, // Pool ID for CPMM
       };
     }
 
@@ -210,10 +224,69 @@ export async function getFighterProfile(fighterId: string): Promise<FighterProfi
       };
     }
 
-    return null;
+      return null;
   } catch (error) {
     console.error("Error fetching fighter profile:", error);
     return null;
+  }
+}
+
+/**
+ * Get MarketPool object from Sui by pool ID
+ */
+export async function getMarketPool(poolId: string): Promise<MarketPoolData | null> {
+  try {
+    const poolType = `${OPEN_CORNER_PACKAGE_ID}::market_pool::MarketPool`;
+    const object = await suiClient.getObject({
+      id: poolId,
+      options: {
+        showContent: true,
+        showType: true,
+      },
+    });
+
+    if (object.data?.content && "fields" in object.data.content) {
+      const fields = object.data.content.fields as any;
+      
+      return {
+        id: poolId,
+        marketId: fields.market_id || "",
+        yesBalance: fields.yes_balance?.value || "0",
+        noBalance: fields.no_balance?.value || "0",
+        k: fields.k || "0",
+        collateral: fields.collateral?.value || "0",
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching market pool:", error);
+    return null;
+  }
+}
+
+/**
+ * Get USDO coin balance for a user
+ * @param address - User address
+ * @returns Balance in base units (1 USDO = 10^9 base units)
+ */
+export async function getUsdoBalance(address: string): Promise<bigint> {
+  try {
+    const usdoCoinType = `${OPEN_CORNER_PACKAGE_ID}::usdo::USDO`;
+    const coins = await suiClient.getCoins({
+      owner: address,
+      coinType: usdoCoinType,
+    });
+
+    let totalBalance = BigInt(0);
+    for (const coin of coins.data) {
+      totalBalance += BigInt(coin.balance || "0");
+    }
+
+    return totalBalance;
+  } catch (error) {
+    console.error("Error fetching USDO balance:", error);
+    return BigInt(0);
   }
 }
 

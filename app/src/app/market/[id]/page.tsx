@@ -17,6 +17,7 @@ import { SEED_DATA } from "@/lib/sui/seed-data";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CPMTrade } from "@/components/market/cpmm-trade";
 
 interface MarketPageProps {
   params: {
