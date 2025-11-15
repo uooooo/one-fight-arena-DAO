@@ -4,6 +4,7 @@ use sui::coin::{Self, TreasuryCap};
 use sui::coin_registry;
 use sui::transfer;
 use sui::tx_context::TxContext;
+use std::string;
 
 /// YES coin for prediction markets
 /// Each market creates its own YES/NO coin pair
@@ -14,6 +15,7 @@ public struct YES_COIN has drop {}
 /// The TreasuryCap is transferred to the package publisher
 fun init(otw: YES_COIN, ctx: &mut TxContext) {
     // Create currency using One-Time Witness
+    // Note: Returns (CurrencyInitializer, TreasuryCap) in this order
     let (initializer, treasury) = coin_registry::new_currency_with_otw<YES_COIN>(
         otw,
         9, // decimals
@@ -25,13 +27,13 @@ fun init(otw: YES_COIN, ctx: &mut TxContext) {
     );
     
     // Finalize the currency registration
-    let metadata_cap = coin_registry::finalize_registration(initializer, ctx);
+    let metadata_cap = coin_registry::finalize(initializer, ctx);
     
     // Transfer TreasuryCap to the package publisher
-    transfer::transfer(treasury, tx_context::sender(ctx));
+    transfer::public_transfer(treasury, tx_context::sender(ctx));
     
     // Transfer MetadataCap to the package publisher (for future metadata updates)
-    transfer::transfer(metadata_cap, tx_context::sender(ctx));
+    transfer::public_transfer(metadata_cap, tx_context::sender(ctx));
 }
 
 /// Create YES coin for a market (deprecated - use init function instead)

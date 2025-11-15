@@ -4,6 +4,7 @@ use sui::coin::{Self, TreasuryCap};
 use sui::coin_registry;
 use sui::transfer;
 use sui::tx_context::TxContext;
+use std::string;
 
 /// NO coin for prediction markets
 /// Each market creates its own YES/NO coin pair
@@ -25,13 +26,13 @@ fun init(otw: NO_COIN, ctx: &mut TxContext) {
     );
     
     // Finalize the currency registration
-    let metadata_cap = coin_registry::finalize_registration(initializer, ctx);
+    let metadata_cap = coin_registry::finalize(initializer, ctx);
     
     // Transfer TreasuryCap to the package publisher
-    transfer::transfer(treasury, tx_context::sender(ctx));
+    transfer::public_transfer(treasury, tx_context::sender(ctx));
     
     // Transfer MetadataCap to the package publisher (for future metadata updates)
-    transfer::transfer(metadata_cap, tx_context::sender(ctx));
+    transfer::public_transfer(metadata_cap, tx_context::sender(ctx));
 }
 
 /// Create NO coin for a market (deprecated - use init function instead)
