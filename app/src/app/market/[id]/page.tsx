@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,12 +20,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CPMTrade } from "@/components/market/cpmm-trade";
 
 interface MarketPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function MarketPage({ params }: MarketPageProps) {
+  // Unwrap params Promise using React.use()
+  const resolvedParams = use(params);
+  const marketIdFromParams = resolvedParams.id;
   const { signAndExecuteTransactionBlock, currentAccount } = useWalletKit();
   const [amount, setAmount] = useState("");
   const [selectedSide, setSelectedSide] = useState<"yes" | "no">("yes");
@@ -40,8 +43,8 @@ export default function MarketPage({ params }: MarketPageProps) {
     async function fetchMarket() {
       setIsLoading(true);
       try {
-        // Try to use params.id, fallback to SEED_DATA.marketId
-        const marketId = params.id || SEED_DATA.marketId;
+        // Use resolved params.id, fallback to SEED_DATA.marketId
+        const marketId = marketIdFromParams || SEED_DATA.marketId;
         if (!marketId) {
           console.error("No market ID provided");
           setIsLoading(false);
@@ -53,10 +56,10 @@ export default function MarketPage({ params }: MarketPageProps) {
           // Enrich with metadata from SEED_DATA
           setMarket({
             ...marketData,
-            poolId: SEED_DATA.poolId || undefined,
+            poolId: marketData.poolId || SEED_DATA.poolId || undefined,
             yesCoinType: SEED_DATA.yesCoinType || undefined,
             noCoinType: SEED_DATA.noCoinType || undefined,
-            // Mock prices and volume for now (will be replaced with actual DeepBook data)
+            // Mock prices and volume for now (will be replaced with actual CPMM data)
             yesPrice: 54.2,
             noPrice: 45.8,
             volume: 12500,
@@ -84,7 +87,7 @@ export default function MarketPage({ params }: MarketPageProps) {
     }
 
     fetchMarket();
-  }, [params.id]);
+  }, [marketIdFromParams]);
 
   const handleTrade = async (side: "yes" | "no") => {
     if (!currentAccount || !amount || !signAndExecuteTransactionBlock) {
@@ -306,7 +309,7 @@ export default function MarketPage({ params }: MarketPageProps) {
             </Card>
 
             {/* CPMM Trading Panel */}
-            {tradeMode === "cpmm" && market?.poolId && (
+            {tradeMode === "cpmm" && market?.poolId && market.poolId !== "PLACEHOLDER_POOL_ID" && !market.poolId.startsWith("PLACEHOLDER") && (
               <CPMTrade
                 marketId={market.id}
                 poolId={market.poolId}
@@ -315,6 +318,20 @@ export default function MarketPage({ params }: MarketPageProps) {
                 marketState={market.state}
                 winningCoinType={market.winningCoinType}
               />
+            )}
+
+            {/* CPMM Not Ready Message */}
+            {tradeMode === "cpmm" && (!market?.poolId || market.poolId === "PLACEHOLDER_POOL_ID" || market.poolId.startsWith("PLACEHOLDER")) && (
+              <Card className="border-border bg-card">
+                <CardContent className="p-6 text-center">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    CPMM Pool is not ready yet
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    The market pool needs to be created first. This happens automatically when a market is created.
+                  </p>
+                </CardContent>
+              </Card>
             )}
 
             {/* DeepBook Trading Panel */}

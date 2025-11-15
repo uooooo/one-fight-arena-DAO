@@ -53,6 +53,13 @@ export function CPMTrade({
   // Fetch pool data and USDO balance
   useEffect(() => {
     async function fetchData() {
+      // Validate poolId before fetching
+      if (!poolId || poolId === "PLACEHOLDER_POOL_ID" || poolId.startsWith("PLACEHOLDER")) {
+        console.warn("Pool ID is not set or is a placeholder:", poolId);
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(true);
       try {
         // Fetch pool data
@@ -66,6 +73,7 @@ export function CPMTrade({
         }
       } catch (error) {
         console.error("Error fetching data:", error);
+        // Don't set poolData to null on error, keep previous state
       } finally {
         setIsLoading(false);
       }
@@ -313,6 +321,19 @@ export function CPMTrade({
       return (Number(output) / 1_000_000_000).toFixed(6);
     }
   };
+
+  // Don't render if poolId is invalid
+  if (!poolId || poolId === "PLACEHOLDER_POOL_ID" || poolId.startsWith("PLACEHOLDER")) {
+    return (
+      <Card className="border-border bg-card">
+        <CardContent className="p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Pool ID is not available. Market pool needs to be created.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border-border bg-card">

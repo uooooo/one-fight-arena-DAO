@@ -235,6 +235,12 @@ export async function getFighterProfile(fighterId: string): Promise<FighterProfi
  * Get MarketPool object from Sui by pool ID
  */
 export async function getMarketPool(poolId: string): Promise<MarketPoolData | null> {
+  // Validate poolId format (Sui object IDs are hex strings starting with 0x)
+  if (!poolId || poolId === "PLACEHOLDER_POOL_ID" || poolId.startsWith("PLACEHOLDER") || !poolId.startsWith("0x")) {
+    console.warn("Invalid pool ID:", poolId);
+    return null;
+  }
+
   try {
     const poolType = `${OPEN_CORNER_PACKAGE_ID}::market_pool::MarketPool`;
     const object = await suiClient.getObject({
