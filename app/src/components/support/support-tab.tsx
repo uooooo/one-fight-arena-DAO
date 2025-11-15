@@ -119,7 +119,7 @@ function SupportDialog({ vault, fighter }: SupportDialogProps) {
 
       // Execute transaction
       const result = await signAndExecuteTransactionBlock({
-        transaction: tx,
+        transactionBlock: tx,
         options: {
           showEffects: true,
           showEvents: true,
@@ -350,4 +350,3 @@ export function SupportTab({ eventId, fighters }: SupportTabProps) {
     </div>
   );
 }
-

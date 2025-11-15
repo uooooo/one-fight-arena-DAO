@@ -83,6 +83,9 @@ const E_WRONG_MARKET: u64 = 5;
 /// 1. Call init_market_pool to create empty pool
 /// 2. Users call split_usdo to mint YES/NO and lock collateral
 /// 3. LP calls deposit_liquidity to provide YES/NO to the pool for CPMM trading
+/// 
+/// NOTE: This is a public function that returns ID.
+/// For use from transactions, use the entry wrapper function below.
 public fun init_market_pool(
     market_id: ID,
     ctx: &mut TxContext,
@@ -100,6 +103,18 @@ public fun init_market_pool(
     transfer::share_object(pool);
     
     pool_id
+}
+
+/// Entry function wrapper for init_market_pool
+/// This can be called from transactions, but does not return the pool_id.
+/// The pool_id must be obtained from transaction effects (objectChanges).
+public entry fun init_market_pool_entry(
+    market_id: ID,
+    ctx: &mut TxContext,
+) {
+    let _pool_id = init_market_pool(market_id, ctx);
+    // pool_id is returned by init_market_pool but we ignore it here
+    // Transaction effects will contain the created MarketPool object
 }
 
 /// Split N USDO into YES N + NO N pair (fixed 1:1 ratio)

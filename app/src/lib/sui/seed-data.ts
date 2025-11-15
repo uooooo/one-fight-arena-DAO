@@ -13,6 +13,8 @@ export interface SeedData {
   treasuryCapYesId?: string; // TreasuryCap<YES_COIN> ID
   treasuryCapNoId?: string; // TreasuryCap<NO_COIN> ID
   treasuryCapUsdoId?: string; // TreasuryCap<USDO> ID
+  usdoFaucetId?: string; // Shared faucet object ID
+  usdoFaucetPackageId?: string; // Package ID hosting the faucet module
   timestamp: string;
 }
 
@@ -64,6 +66,8 @@ export const SEED_DATA: SeedData = {
   treasuryCapYesId: process.env.NEXT_PUBLIC_TREASURY_CAP_YES_ID,
   treasuryCapNoId: process.env.NEXT_PUBLIC_TREASURY_CAP_NO_ID,
   treasuryCapUsdoId: process.env.NEXT_PUBLIC_TREASURY_CAP_USDO_ID,
+  usdoFaucetId: process.env.NEXT_PUBLIC_USDO_FAUCET_ID,
+  usdoFaucetPackageId: process.env.NEXT_PUBLIC_USDO_FAUCET_PACKAGE_ID,
   timestamp: new Date().toISOString(),
 };
 
@@ -71,4 +75,3 @@ export const SEED_DATA: SeedData = {
 export const getSeedData = async (): Promise<SeedData> => {
   return await loadSeedData();
 };
-

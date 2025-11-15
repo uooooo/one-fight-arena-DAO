@@ -97,6 +97,7 @@ public fun create_market(
     let market_id = market_id_uid.to_inner(); // Convert UID to ID
     
     // Create MarketPool for CPMM trading (using market_id)
+    // Call init_market_pool which creates and returns the pool_id
     let pool_id = market_pool::init_market_pool(market_id, ctx);
     
     // Create Market with the actual pool_id

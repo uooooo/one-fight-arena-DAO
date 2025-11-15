@@ -1,12 +1,14 @@
 {
   "network": "testnet",
-  "packageId": "0xef78795a038b2743a2c20a0a2ab8c46f4c0b11dc277f9cf6e2587186b12798e6",
+  "packageId": "0xacda8d805f68094ad0e2852412b7bdf3e9d90022bb2186339a4bac35600cb5fa",
   "adminCapId": "0x25aa6f9f4ead4f0dccf1de16958a5bdd1d3a8623e7b2d5e6c42d9eea7b04c134",
   "fighterId": "0x7f35a33fca3ed3e23b0f104cb1acc1f4b9aeaf7d28a50463d2ca705d7fbc2904",
   "vaultId": "0xcfa550799b47e4df67097c8675577317c794fe6a16361aedaba9dae560cc3ccf",
   "marketId": "0x876c6432bb74ec286e815a864f69b57065eb0bf28a3878f1ba66a0efda90f048",
-  "poolId": "PLACEHOLDER_POOL_ID",
+  "poolId": "0x07bb7fc5ce09fcb63e292a39b95e6535987eda8101fa657aeea45979226e22bf",
   "yesCoinType": "0xd880a2f382c19e29c8c970d012b6ddfe2bde6e2b23ba9219d62720d1a921001a::yes_coin::YES_COIN",
   "noCoinType": "0xd880a2f382c19e29c8c970d012b6ddfe2bde6e2b23ba9219d62720d1a921001a::no_coin::NO_COIN",
+  "usdoFaucetId": "0x450966ef6ed3c9bd0b584e4d422f5ef23bc5cb10202ecab3d836c81e1ded81f6",
+  "usdoFaucetPackageId": "0xb2d0a103d764e343ec925d6ad80ced2b3905aa6815613254eccc6188c7c1e7ff",
   "timestamp": "2025-11-15T00:39:07.758Z"
 }

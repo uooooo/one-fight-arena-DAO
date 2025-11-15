@@ -328,3 +328,47 @@ export function redeemWinningNoTx(
   });
 }
 
+/**
+ * Mint USDO coins
+ * @param treasuryCapUsdoId - TreasuryCap<USDO> ID
+ * @param amount - Amount to mint in base units (1 USDO = 10^9 base units)
+ * @param tx - Transaction builder
+ */
+export function mintUsdoTx(
+  treasuryCapUsdoId: string,
+  amount: bigint,
+  recipientAddress: string,
+  tx: Transaction,
+  coinType?: string
+) {
+  const usdoCoinType = coinType || `${OPEN_CORNER_PACKAGE_ID}::usdo::USDO`;
+  const mintedCoin = tx.moveCall({
+    target: `0x2::coin::mint`,
+    typeArguments: [usdoCoinType],
+    arguments: [
+      tx.object(treasuryCapUsdoId), // &mut TreasuryCap<USDO>
+      tx.pure.u64(amount), // u64 amount in base units
+    ],
+  });
+
+  tx.transferObjects(
+    [mintedCoin],
+    tx.pure.address(recipientAddress)
+  );
+}
+
+/**
+ * Claim USDO from the shared faucet object.
+ */
+export function claimUsdoFromFaucetTx(
+  faucetId: string,
+  amount: bigint,
+  tx: Transaction,
+  packageId?: string
+) {
+  const faucetPackageId = packageId || OPEN_CORNER_PACKAGE_ID;
+  tx.moveCall({
+    target: `${faucetPackageId}::usdo_faucet::claim`,
+    arguments: [tx.object(faucetId), tx.pure.u64(amount)],
+  });
+}

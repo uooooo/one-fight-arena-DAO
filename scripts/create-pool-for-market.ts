@@ -17,15 +17,20 @@ import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { fromB64 } from "@mysten/sui/utils";
-import * as dotenv from "dotenv";
+import { $ } from "bun";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
 
-// Load environment variables
-dotenv.config();
+// Load SEED_DATA.json for package ID
+const seedDataPath = join(import.meta.dir, "..", "SEED_DATA.json");
+let seedData: any = {};
+if (existsSync(seedDataPath)) {
+  seedData = JSON.parse(readFileSync(seedDataPath, "utf-8"));
+}
 
 const MARKET_ID = process.argv[2];
-const NETWORK = process.env.NEXT_PUBLIC_SUI_NETWORK || "testnet";
-const PACKAGE_ID = process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || "0x0";
-const PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
+const NETWORK = seedData.network || process.env.NEXT_PUBLIC_SUI_NETWORK || "testnet";
+const PACKAGE_ID = seedData.packageId || process.env.NEXT_PUBLIC_SUI_PACKAGE_ID || "0x0";
 
 if (!MARKET_ID) {
   console.error("❌ Error: Market ID is required");
@@ -37,27 +42,104 @@ if (!MARKET_ID) {
 
 if (!PACKAGE_ID || PACKAGE_ID === "0x0") {
   console.error("❌ Error: PACKAGE_ID is not set");
-  console.log("Please set NEXT_PUBLIC_SUI_PACKAGE_ID in .env.local");
-  process.exit(1);
-}
-
-if (!PRIVATE_KEY) {
-  console.error("❌ Error: SUI_PRIVATE_KEY is not set");
-  console.log("Please set SUI_PRIVATE_KEY in .env.local");
+  console.log("Please ensure SEED_DATA.json has packageId or set NEXT_PUBLIC_SUI_PACKAGE_ID");
   process.exit(1);
 }
 
 // Initialize Sui client
 const client = new SuiClient({ url: getFullnodeUrl(NETWORK) });
 
-// Get signer from private key
-function getSigner() {
+// Import decodeSuiPrivateKey if available
+let decodeSuiPrivateKey: ((key: string) => { secretKey: Uint8Array }) | null = null;
+try {
+  const suiUtils = await import("@mysten/sui/cryptography");
+  decodeSuiPrivateKey = suiUtils.decodeSuiPrivateKey as any;
+} catch {
   try {
-    const keypair = Ed25519Keypair.fromSecretKey(fromB64(PRIVATE_KEY));
-    return keypair;
-  } catch (error) {
-    console.error("❌ Failed to parse private key:", error);
-    process.exit(1);
+    const suiUtils = await import("@mysten/sui/utils");
+    decodeSuiPrivateKey = (suiUtils as any).decodeSuiPrivateKey;
+  } catch {
+    // Will use fallback method
+  }
+}
+
+// Get signer from Sui CLI
+async function getSigner() {
+  try {
+    // Get active address
+    const address = (await $`sui client active-address`.quiet().text()).trim();
+    
+    // Try to export the key using Sui CLI with JSON format
+    let keyExport: any;
+    try {
+      const keyListJson = (await $`sui keytool list --json`.quiet().text()).trim();
+      const keys = JSON.parse(keyListJson);
+      
+      // Find key matching the active address
+      const matchingKey = keys.find((key: any) => key.suiAddress === address);
+      if (!matchingKey) {
+        throw new Error("Key not found in JSON list");
+      }
+      
+      // Export the key
+      const exportOutput = (await $`sui keytool export --key-identity ${matchingKey.alias} --json`.quiet().text()).trim();
+      keyExport = JSON.parse(exportOutput);
+    } catch (jsonError) {
+      // Fallback to parsing table output
+      const keyList = (await $`sui keytool list`.quiet().text()).trim();
+      
+      // Simple regex to find alias in the nested table structure
+      const aliasMatch = keyList.match(/alias\s*│\s*([^\s│]+)/);
+      if (!aliasMatch) {
+        throw new Error("Could not extract alias from key list");
+      }
+      
+      const keyAlias = aliasMatch[1].trim();
+      console.log(`   Using key alias: ${keyAlias}`);
+      
+      // Export the key
+      const exportOutput = (await $`sui keytool export --key-identity ${keyAlias} --json`.quiet().text()).trim();
+      keyExport = JSON.parse(exportOutput);
+    }
+    
+    // Extract private key from export
+    const privateKeyStr = keyExport.exportedPrivateKey || keyExport.key?.exportedPrivateKey;
+    if (!privateKeyStr) {
+      throw new Error("Could not find exportedPrivateKey in export output");
+    }
+    
+    // Parse the Sui private key format (suiprivkey1...)
+    if (privateKeyStr.startsWith("suiprivkey1")) {
+      // Try to use decodeSuiPrivateKey if available
+      if (decodeSuiPrivateKey) {
+        const decoded = decodeSuiPrivateKey(privateKeyStr);
+        return Ed25519Keypair.fromSecretKey(decoded.secretKey);
+      } else {
+        throw new Error("Could not decode suiprivkey1 format. Please ensure @mysten/sui/cryptography is available.");
+      }
+    } else {
+      // Try base64 decode
+      const keypairBytes = fromB64(privateKeyStr);
+      const scheme = keypairBytes[0];
+      if (scheme === 0) {
+        return Ed25519Keypair.fromSecretKey(keypairBytes.slice(1));
+      } else {
+        throw new Error(`Unsupported key scheme: ${scheme}`);
+      }
+    }
+  } catch (error: any) {
+    console.error("❌ Failed to get signer:", error.message);
+    console.log("\nTrying alternative method...");
+    // Alternative: Use environment variable
+    const envKey = process.env.SUI_PRIVATE_KEY;
+    if (envKey) {
+      try {
+        return Ed25519Keypair.fromSecretKey(fromB64(envKey));
+      } catch {
+        throw new Error("Invalid SUI_PRIVATE_KEY format");
+      }
+    }
+    throw error;
   }
 }
 
@@ -67,7 +149,7 @@ async function main() {
   console.log(`Network: ${NETWORK}`);
   console.log(`Package ID: ${PACKAGE_ID}\n`);
 
-  const signer = getSigner();
+  const signer = await getSigner();
   const address = signer.toSuiAddress();
   console.log(`Signer address: ${address}\n`);
 
@@ -109,21 +191,29 @@ async function main() {
     // Create transaction to initialize MarketPool
     console.log("\n📝 Building transaction...");
     const tx = new Transaction();
+    
+    // Set the sender
+    tx.setSender(address);
 
-    // Call market_pool::init_market_pool(market_id, ctx)
+    // Call market_pool::init_market_pool_entry(market_id, ctx)
     // Note: We use the Market ID as the market_id parameter
+    // This entry function creates the pool and makes it a shared object
+    // The pool_id will be in the transaction effects (objectChanges)
     tx.moveCall({
-      target: `${PACKAGE_ID}::market_pool::init_market_pool`,
+      target: `${PACKAGE_ID}::market_pool::init_market_pool_entry`,
       arguments: [
         tx.pure.id(MARKET_ID), // Use Market ID as market_id
       ],
     });
 
-    // Execute transaction
+    // Build and sign transaction
+    console.log("⏳ Building and signing transaction...");
+    
     console.log("⏳ Executing transaction...\n");
+    // Use signAndExecuteTransaction for simplicity
     const result = await client.signAndExecuteTransaction({
-      signer,
       transaction: tx,
+      signer,
       options: {
         showEffects: true,
         showEvents: true,

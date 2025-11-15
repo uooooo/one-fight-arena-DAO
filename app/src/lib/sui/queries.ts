@@ -333,9 +333,9 @@ export async function getMarketPool(poolId: string): Promise<MarketPoolData | nu
  * @param address - User address
  * @returns Balance in base units (1 USDO = 10^9 base units)
  */
-export async function getUsdoBalance(address: string): Promise<bigint> {
+export async function getUsdoBalance(address: string, customCoinType?: string): Promise<bigint> {
   try {
-    const usdoCoinType = `${OPEN_CORNER_PACKAGE_ID}::usdo::USDO`;
+    const usdoCoinType = customCoinType || `${OPEN_CORNER_PACKAGE_ID}::usdo::USDO`;
     const coins = await suiClient.getCoins({
       owner: address,
       coinType: usdoCoinType,
@@ -353,3 +353,165 @@ export async function getUsdoBalance(address: string): Promise<bigint> {
   }
 }
 
+/**
+ * Try to find TreasuryCap<USDO> ID by querying package owner's objects
+ * @param packageId - Package ID
+ * @returns TreasuryCap<USDO> ID if found, null otherwise
+ */
+export async function findTreasuryCapUsdoId(packageId: string): Promise<string | null> {
+  try {
+    console.log("🔍 Searching for TreasuryCap<USDO> ID for package:", packageId);
+    
+    // Get package info to find the publisher
+    const packageInfo = await suiClient.getObject({
+      id: packageId,
+      options: {
+        showContent: true,
+        showOwner: true,
+        showPreviousTransaction: true,
+      },
+    });
+
+    console.log("📦 Package info:", {
+      hasPreviousTx: !!packageInfo.data?.previousTransaction,
+      owner: packageInfo.data?.owner,
+    });
+
+    // Try to get package owner from previous transaction
+    // TreasuryCap is typically owned by the package publisher
+    if (packageInfo.data?.previousTransaction) {
+      const txDigest = packageInfo.data.previousTransaction;
+      console.log("📋 Fetching publish transaction:", txDigest);
+      
+      const tx = await suiClient.getTransactionBlock({
+        digest: txDigest,
+        options: {
+          showObjectChanges: true,
+          showEffects: true,
+          showInput: true,
+        },
+      });
+
+      console.log("🔍 Transaction details:", {
+        hasObjectChanges: !!tx.objectChanges,
+        objectChangesCount: tx.objectChanges?.length || 0,
+        sender: tx.transaction?.data?.sender,
+      });
+
+      // Look for TreasuryCap in object changes
+      if (tx.objectChanges) {
+        for (const change of tx.objectChanges) {
+          const objType = "objectType" in change ? change.objectType : null;
+          const objId = "objectId" in change ? change.objectId : null;
+          
+          console.log("🔎 Checking object change:", {
+            type: change.type,
+            objType,
+            objId,
+          });
+
+          // Check if this is a TreasuryCap<USDO>
+          if (objType && typeof objType === "string" && objType.includes("TreasuryCap") && objType.includes("USDO")) {
+            console.log("✅ Found TreasuryCap<USDO> in objectChanges:", objId);
+            
+            // Check owner
+            if ("owner" in change) {
+              const owner = change.owner;
+              if (typeof owner === "object") {
+                if ("AddressOwner" in owner) {
+                  console.log("✅ TreasuryCap<USDO> is owned by address:", owner.AddressOwner);
+                  return objId || null;
+                } else {
+                  console.log("⚠️ TreasuryCap<USDO> owner type:", Object.keys(owner));
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Also try querying by type from the sender of the publish transaction
+      if (tx.transaction?.data?.sender) {
+        const sender = tx.transaction.data.sender;
+        console.log("🔍 Querying TreasuryCap from sender:", sender);
+        
+        // First, try querying all objects (more reliable)
+        try {
+          console.log("🔄 Querying all owned objects from sender...");
+          const allObjects = await suiClient.getOwnedObjects({
+            owner: sender,
+            options: {
+              showType: true,
+              showContent: true,
+            },
+            limit: 50, // Limit to first 50 objects
+          });
+
+          console.log("📋 All objects count:", allObjects.data?.length || 0);
+          
+          if (allObjects.data) {
+            // Log all object types for debugging
+            const objectTypes = allObjects.data
+              .map(obj => obj.data?.type)
+              .filter(Boolean);
+            console.log("📋 Object types found:", objectTypes);
+            
+            // Look for TreasuryCap<USDO>
+            for (const obj of allObjects.data) {
+              const objType = obj.data?.type;
+              if (objType) {
+                console.log("🔎 Checking object:", {
+                  id: obj.data?.objectId,
+                  type: objType,
+                });
+                
+                if (objType.includes("TreasuryCap") && objType.includes("USDO")) {
+                  const treasuryCapId = obj.data?.objectId;
+                  console.log("✅ Found TreasuryCap<USDO> ID:", treasuryCapId);
+                  return treasuryCapId || null;
+                }
+              }
+            }
+          }
+        } catch (fallbackError: any) {
+          console.error("❌ Error querying all objects:", fallbackError?.message || fallbackError);
+        }
+        
+        // Also try the specific type query
+        const treasuryCapType = `0x2::coin::TreasuryCap<${OPEN_CORNER_PACKAGE_ID}::usdo::USDO>`;
+        console.log("🔍 Also trying specific type query:", treasuryCapType);
+        
+        try {
+          const objects = await suiClient.getOwnedObjects({
+            owner: sender,
+            filter: {
+              StructType: treasuryCapType,
+            },
+            options: {
+              showContent: true,
+              showType: true,
+            },
+          });
+
+          console.log("📋 Specific type query result:", {
+            hasData: !!objects.data,
+            count: objects.data?.length || 0,
+          });
+
+          if (objects.data && objects.data.length > 0) {
+            const treasuryCapId = objects.data[0].data?.objectId;
+            console.log("✅ Found TreasuryCap<USDO> ID via specific query:", treasuryCapId);
+            return treasuryCapId || null;
+          }
+        } catch (queryError: any) {
+          console.warn("⚠️ Error querying TreasuryCap by specific type:", queryError?.message || queryError);
+        }
+      }
+    }
+  } catch (error: any) {
+    console.error("❌ Error finding TreasuryCap<USDO> ID:", error?.message || error);
+  }
+
+  console.warn("⚠️ Could not find TreasuryCap<USDO> ID");
+  return null;
+}

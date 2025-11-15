@@ -97,7 +97,11 @@ try {
 // Step 5: Publish package
 console.log("📤 Publishing package...");
 try {
-  const publishOutput = await $`cd ${packageDir} && sui client publish --gas-budget 100000000 .`.text();
+  // Gas budget: 350 MIST = 0.35 SUI for package publication
+  // Sui package publication requires more gas than regular transactions
+  // The gas cost depends on package size, number of modules, and network conditions
+  // Note: We're using a lower budget to work with available gas coins
+  const publishOutput = await $`cd ${packageDir} && sui client publish --gas-budget 350000000 .`.text();
   console.log(publishOutput);
   
   // Extract package ID from output

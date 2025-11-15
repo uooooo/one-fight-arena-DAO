@@ -16,17 +16,26 @@ import {
   swapYesForNoTx,
   swapNoForYesTx,
   redeemWinningYesTx,
-  redeemWinningNoTx
+  redeemWinningNoTx,
+  mintUsdoTx,
+  claimUsdoFromFaucetTx
 } from "@/lib/sui/transactions";
 import { suiClient } from "@/lib/sui/client";
-import { getMarketPool, getUsdoBalance, type MarketPoolData } from "@/lib/sui/queries";
+import { getMarketPool, getUsdoBalance, findTreasuryCapUsdoId, type MarketPoolData } from "@/lib/sui/queries";
 import { OPEN_CORNER_PACKAGE_ID } from "@/lib/sui/constants";
+import { SEED_DATA } from "@/lib/sui/seed-data";
 
 interface CPMTradeProps {
   marketId: string;
   poolId: string;
+  packageId?: string;
   treasuryCapYesId: string;
   treasuryCapNoId: string;
+  treasuryCapUsdoId?: string; // Optional: TreasuryCap<USDO> ID for minting
+  yesCoinType?: string;
+  noCoinType?: string;
+  usdoFaucetId?: string;
+  usdoFaucetPackageId?: string;
   marketState: "open" | "resolved";
   winningCoinType?: string;
 }
@@ -36,19 +45,46 @@ type TradeAction = "split" | "join" | "swap" | "redeem";
 export function CPMTrade({ 
   marketId, 
   poolId, 
+  packageId,
   treasuryCapYesId,
   treasuryCapNoId,
+  treasuryCapUsdoId,
+  yesCoinType,
+  noCoinType,
+  usdoFaucetId,
+  usdoFaucetPackageId,
   marketState,
   winningCoinType
 }: CPMTradeProps) {
   const { signAndExecuteTransactionBlock, currentAccount } = useWalletKit();
   const [action, setAction] = useState<TradeAction>("split");
   const [amount, setAmount] = useState("");
+  const [mintAmount, setMintAmount] = useState("100"); // Default to 100 USDO
   const [slippage, setSlippage] = useState("1"); // 1% default slippage
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMinting, setIsMinting] = useState(false);
   const [poolData, setPoolData] = useState<MarketPoolData | null>(null);
   const [usdoBalance, setUsdoBalance] = useState<bigint>(BigInt(0));
   const [isLoading, setIsLoading] = useState(true);
+  const [resolvedTreasuryCapUsdoId, setResolvedTreasuryCapUsdoId] = useState<string | null>(treasuryCapUsdoId || null);
+  const resolvedPackageId = packageId || SEED_DATA.packageId || OPEN_CORNER_PACKAGE_ID;
+  const resolvedUsdoCoinType = `${resolvedPackageId}::usdo::USDO`;
+  const resolvedYesCoinType = yesCoinType || `${resolvedPackageId}::yes_coin::YES_COIN`;
+  const resolvedNoCoinType = noCoinType || `${resolvedPackageId}::no_coin::NO_COIN`;
+  const resolvedUsdoFaucetId =
+    (usdoFaucetId && usdoFaucetId.startsWith("0x")
+      ? usdoFaucetId
+      : undefined) ??
+    ((SEED_DATA.usdoFaucetId && SEED_DATA.usdoFaucetId.startsWith("0x"))
+      ? SEED_DATA.usdoFaucetId
+      : undefined) ??
+    null;
+  const resolvedFaucetPackageId =
+    usdoFaucetPackageId ||
+    SEED_DATA.usdoFaucetPackageId ||
+    packageId ||
+    undefined;
+  const canMintUsdo = Boolean(resolvedUsdoFaucetId || resolvedTreasuryCapUsdoId);
 
   // Fetch pool data and USDO balance
   useEffect(() => {
@@ -68,7 +104,7 @@ export function CPMTrade({
 
         // Fetch USDO balance
         if (currentAccount?.address) {
-          const balance = await getUsdoBalance(currentAccount.address);
+          const balance = await getUsdoBalance(currentAccount.address, resolvedUsdoCoinType);
           setUsdoBalance(balance);
         }
       } catch (error) {
@@ -83,7 +119,40 @@ export function CPMTrade({
     // Refresh every 10 seconds
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
-  }, [poolId, currentAccount?.address]);
+  }, [poolId, currentAccount?.address, resolvedUsdoCoinType]);
+
+  // Try to resolve TreasuryCap<USDO> ID if not provided
+  useEffect(() => {
+    async function resolveTreasuryCap() {
+      if (resolvedUsdoFaucetId) {
+        // Faucet available, no need to resolve treasury cap
+        setResolvedTreasuryCapUsdoId(null);
+        return;
+      }
+
+      if (treasuryCapUsdoId) {
+        setResolvedTreasuryCapUsdoId(treasuryCapUsdoId);
+        console.log("CPMTrade - Using provided treasuryCapUsdoId:", treasuryCapUsdoId);
+        return;
+      }
+
+      // Try to find TreasuryCap from package
+      console.log("CPMTrade - treasuryCapUsdoId not provided, trying to find from package...");
+      try {
+        const foundId = await findTreasuryCapUsdoId(OPEN_CORNER_PACKAGE_ID);
+        if (foundId) {
+          setResolvedTreasuryCapUsdoId(foundId);
+          console.log("CPMTrade - Found treasuryCapUsdoId:", foundId);
+        } else {
+          console.warn("CPMTrade - Could not find TreasuryCap<USDO> ID");
+        }
+      } catch (error) {
+        console.error("Error resolving TreasuryCap<USDO> ID:", error);
+      }
+    }
+
+    resolveTreasuryCap();
+  }, [treasuryCapUsdoId, resolvedUsdoFaucetId]);
 
   // Calculate odds from pool data
   const calculateYesOdds = (): number => {
@@ -98,6 +167,115 @@ export function CPMTrade({
 
   const yesOdds = calculateYesOdds();
   const noOdds = 100 - yesOdds;
+
+  const handleMintUsdo = async () => {
+    if (!currentAccount || !mintAmount || !signAndExecuteTransactionBlock) {
+      alert("Please connect your wallet and enter an amount.");
+      return;
+    }
+
+    const amountBigInt = BigInt(Math.floor(parseFloat(mintAmount) * 1_000_000_000)); // Convert to base units
+    if (amountBigInt <= BigInt(0)) {
+      alert("Please enter a valid amount greater than 0.");
+      return;
+    }
+
+    const faucetId = resolvedUsdoFaucetId;
+    if (faucetId) {
+      setIsMinting(true);
+      try {
+        console.log("🚰 Claiming USDO from faucet:", {
+          faucetId,
+          amount: mintAmount,
+          amountBigInt: amountBigInt.toString(),
+        });
+
+        const tx = new Transaction();
+        claimUsdoFromFaucetTx(faucetId, amountBigInt, tx, resolvedFaucetPackageId);
+
+        const result = await signAndExecuteTransactionBlock({
+          transactionBlock: tx,
+          options: {
+            showEffects: true,
+            showEvents: true,
+            showObjectChanges: true,
+            showBalanceChanges: true,
+          },
+        });
+
+        await suiClient.waitForTransaction({ digest: result.digest });
+        alert(`Successfully claimed ${mintAmount} USDO from faucet!`);
+        setMintAmount("");
+
+        if (currentAccount?.address) {
+          const balance = await getUsdoBalance(currentAccount.address, resolvedUsdoCoinType);
+          setUsdoBalance(balance);
+        }
+      } catch (error: any) {
+        console.error("Error claiming USDO from faucet:", error);
+        alert(error?.message || "Failed to claim USDO. Please try again.");
+      } finally {
+        setIsMinting(false);
+      }
+      return;
+    }
+
+    const treasuryCapId = resolvedTreasuryCapUsdoId;
+    if (!treasuryCapId) {
+      alert("USDO minting is not available. Faucet or TreasuryCap<USDO> ID is not configured.");
+      return;
+    }
+
+    setIsMinting(true);
+    try {
+      console.log("🔍 Minting USDO:", {
+        treasuryCapId,
+        amount: mintAmount,
+        amountBigInt: amountBigInt.toString(),
+        packageId: resolvedPackageId,
+        coinType: resolvedUsdoCoinType,
+      });
+      
+      // Create transaction using the same pattern as handleSplit
+      const tx = new Transaction();
+      
+      // Mint USDO and transfer to the current wallet
+      mintUsdoTx(treasuryCapId, amountBigInt, currentAccount.address, tx, resolvedUsdoCoinType);
+
+      console.log("📋 Transaction built:", {
+        hasTransaction: !!tx,
+        transactionType: typeof tx,
+        hasSerialize: typeof tx.serialize === "function",
+        hasToJSON: typeof tx.toJSON === "function",
+        coinType: resolvedUsdoCoinType,
+      });
+
+      const result = await signAndExecuteTransactionBlock({
+        transactionBlock: tx,
+        options: {
+          showEffects: true,
+          showEvents: true,
+          showObjectChanges: true,
+          showBalanceChanges: true,
+        },
+      });
+
+      await suiClient.waitForTransaction({ digest: result.digest });
+      alert(`Successfully minted ${mintAmount} USDO!`);
+      setMintAmount("");
+      
+      // Refresh USDO balance
+      if (currentAccount?.address) {
+        const balance = await getUsdoBalance(currentAccount.address, resolvedUsdoCoinType);
+        setUsdoBalance(balance);
+      }
+    } catch (error: any) {
+      console.error("Error minting USDO:", error);
+      alert(error?.message || "Failed to mint USDO. Please try again.");
+    } finally {
+      setIsMinting(false);
+    }
+  };
 
   const handleSplit = async () => {
     if (!currentAccount || !amount || !signAndExecuteTransactionBlock) {
@@ -122,10 +300,9 @@ export function CPMTrade({
       
       // Get USDO coin (simplified: assume user has a single USDO coin)
       // In production, would need to handle coin merging/splitting
-      const usdoCoinType = `${OPEN_CORNER_PACKAGE_ID}::usdo::USDO`;
       const coins = await suiClient.getCoins({
         owner: currentAccount.address,
-        coinType: usdoCoinType,
+        coinType: resolvedUsdoCoinType,
       });
 
       if (coins.data.length === 0) {
@@ -148,7 +325,7 @@ export function CPMTrade({
       );
 
       const result = await signAndExecuteTransactionBlock({
-        transaction: tx,
+        transactionBlock: tx,
         options: {
           showEffects: true,
           showEvents: true,
@@ -165,7 +342,7 @@ export function CPMTrade({
       const pool = await getMarketPool(poolId);
       setPoolData(pool);
       if (currentAccount?.address) {
-        const balance = await getUsdoBalance(currentAccount.address);
+        const balance = await getUsdoBalance(currentAccount.address, resolvedUsdoCoinType);
         setUsdoBalance(balance);
       }
     } catch (error: any) {
@@ -199,10 +376,9 @@ export function CPMTrade({
 
       if (direction === "yes-to-no") {
         // Get YES coin
-        const yesCoinType = `${OPEN_CORNER_PACKAGE_ID}::yes_coin::YES_COIN`;
         const yesCoins = await suiClient.getCoins({
           owner: currentAccount.address,
-          coinType: yesCoinType,
+          coinType: resolvedYesCoinType,
         });
 
         if (yesCoins.data.length === 0) {
@@ -215,10 +391,9 @@ export function CPMTrade({
         swapYesForNoTx(marketId, poolId, yesCoinId, minOutput, tx);
       } else {
         // Get NO coin
-        const noCoinType = `${OPEN_CORNER_PACKAGE_ID}::no_coin::NO_COIN`;
         const noCoins = await suiClient.getCoins({
           owner: currentAccount.address,
-          coinType: noCoinType,
+          coinType: resolvedNoCoinType,
         });
 
         if (noCoins.data.length === 0) {
@@ -232,7 +407,7 @@ export function CPMTrade({
       }
 
       const result = await signAndExecuteTransactionBlock({
-        transaction: tx,
+        transactionBlock: tx,
         options: {
           showEffects: true,
           showEvents: true,
@@ -381,6 +556,41 @@ export function CPMTrade({
             </span>
           </div>
         )}
+
+        {/* Mint USDO Section */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Mint USDO</Label>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              step="0.01"
+              placeholder="Amount to mint"
+              value={mintAmount}
+              onChange={(e) => setMintAmount(e.target.value)}
+              className="h-10 text-sm flex-1"
+              disabled={!currentAccount}
+            />
+            <Button
+              onClick={handleMintUsdo}
+              disabled={!currentAccount || !mintAmount || isMinting || !canMintUsdo}
+              size="default"
+              variant="outline"
+              className="h-10"
+            >
+              {isMinting ? "Minting..." : "Mint USDO"}
+            </Button>
+          </div>
+          {!canMintUsdo && (
+            <p className="text-xs text-muted-foreground">
+              ⚠️ Configure a USDO faucet or TreasuryCap in SEED_DATA to enable minting.
+            </p>
+          )}
+          {!resolvedUsdoFaucetId && !resolvedTreasuryCapUsdoId && (
+            <p className="text-xs text-muted-foreground">
+              ⚠️ TreasuryCap&lt;USDO&gt; ID is not configured. Trying to find from package...
+            </p>
+          )}
+        </div>
 
         {/* Action Selection */}
         {marketState === "open" && (
@@ -533,4 +743,3 @@ export function CPMTrade({
     </Card>
   );
 }
-

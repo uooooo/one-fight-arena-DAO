@@ -13,7 +13,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { placeBetTx } from "@/lib/sui/transactions";
 import { suiClient } from "@/lib/sui/client";
 import { getMarket } from "@/lib/sui/queries";
-import { SEED_DATA } from "@/lib/sui/seed-data";
+import { SEED_DATA, getSeedData } from "@/lib/sui/seed-data";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -43,15 +43,18 @@ export default function MarketPage({ params }: MarketPageProps) {
     async function fetchMarket() {
       setIsLoading(true);
       try {
+        // Load SEED_DATA dynamically from JSON file
+        const seedData = await getSeedData();
+        
         // Use resolved params.id, but if it's not a valid Sui object ID (doesn't start with 0x),
-        // use SEED_DATA.marketId instead
+        // use seedData.marketId instead
         // This handles both cases: URL with actual market ID, or URL with slug
         let marketId = marketIdFromParams;
         
         // Check if marketIdFromParams is a valid Sui object ID (starts with 0x and is hex)
         if (!marketId || !marketId.startsWith("0x") || marketId.length < 10) {
-          // Not a valid Sui object ID, use SEED_DATA.marketId
-          marketId = SEED_DATA.marketId;
+          // Not a valid Sui object ID, use seedData.marketId
+          marketId = seedData.marketId || SEED_DATA.marketId;
         }
         
         if (!marketId) {
@@ -62,12 +65,39 @@ export default function MarketPage({ params }: MarketPageProps) {
 
         const marketData = await getMarket(marketId);
         if (marketData) {
-          // Enrich with metadata from SEED_DATA
+          // Use poolId from marketData first, then fallback to seedData
+          const poolId = marketData.poolId || seedData.poolId || SEED_DATA.poolId;
+          
+          // Validate poolId (must be a valid Sui object ID, not a placeholder)
+          const isValidPoolId = poolId && 
+            poolId !== "PLACEHOLDER_POOL_ID" && 
+            !poolId.startsWith("PLACEHOLDER") &&
+            poolId.startsWith("0x");
+          
+          // Debug logging
+          console.log("Market data:", {
+            marketId,
+            poolIdFromMarket: marketData.poolId,
+            poolIdFromSeedData: seedData.poolId,
+            finalPoolId: poolId,
+            isValidPoolId,
+            treasuryCapYesId: seedData.treasuryCapYesId || SEED_DATA.treasuryCapYesId,
+            treasuryCapNoId: seedData.treasuryCapNoId || SEED_DATA.treasuryCapNoId,
+            treasuryCapUsdoId: seedData.treasuryCapUsdoId || SEED_DATA.treasuryCapUsdoId,
+          });
+          
+          // Enrich with metadata from seedData
           setMarket({
             ...marketData,
-            poolId: marketData.poolId || SEED_DATA.poolId || undefined,
-            yesCoinType: SEED_DATA.yesCoinType || undefined,
-            noCoinType: SEED_DATA.noCoinType || undefined,
+            poolId: isValidPoolId ? poolId : undefined,
+            packageId: seedData.packageId || SEED_DATA.packageId,
+            usdoFaucetId: seedData.usdoFaucetId || SEED_DATA.usdoFaucetId,
+            usdoFaucetPackageId: seedData.usdoFaucetPackageId || SEED_DATA.usdoFaucetPackageId,
+            yesCoinType: seedData.yesCoinType || SEED_DATA.yesCoinType || undefined,
+            noCoinType: seedData.noCoinType || SEED_DATA.noCoinType || undefined,
+            treasuryCapYesId: seedData.treasuryCapYesId || SEED_DATA.treasuryCapYesId,
+            treasuryCapNoId: seedData.treasuryCapNoId || SEED_DATA.treasuryCapNoId,
+            treasuryCapUsdoId: seedData.treasuryCapUsdoId || SEED_DATA.treasuryCapUsdoId,
             // Mock prices and volume for now (will be replaced with actual CPMM data)
             yesPrice: 54.2,
             noPrice: 45.8,
@@ -149,7 +179,7 @@ export default function MarketPage({ params }: MarketPageProps) {
 
       // Execute transaction
       const result = await signAndExecuteTransactionBlock({
-        transaction: tx,
+        transactionBlock: tx,
         options: {
           showEffects: true,
           showEvents: true,
@@ -338,34 +368,45 @@ export default function MarketPage({ params }: MarketPageProps) {
           <div className="lg:col-span-1 space-y-6">
             {/* Trade Mode Selection */}
             <Card className="border-border bg-card">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Trading Mode</CardTitle>
-                <CardDescription className="text-xs">Choose your trading method</CardDescription>
+              <CardHeader className="pb-2 pt-4">
+                <CardTitle className="text-sm font-semibold">Trading Mode</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-2 pb-4">
                 <Tabs value={tradeMode} onValueChange={(v) => setTradeMode(v as "deepbook" | "cpmm")}>
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="cpmm">CPMM</TabsTrigger>
-                    <TabsTrigger value="deepbook">DeepBook</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-2 h-9">
+                    <TabsTrigger value="cpmm" className="text-xs">CPMM</TabsTrigger>
+                    <TabsTrigger value="deepbook" className="text-xs">DeepBook</TabsTrigger>
                   </TabsList>
                 </Tabs>
               </CardContent>
             </Card>
 
             {/* CPMM Trading Panel */}
-            {tradeMode === "cpmm" && market?.poolId && market.poolId !== "PLACEHOLDER_POOL_ID" && !market.poolId.startsWith("PLACEHOLDER") && (
+            {tradeMode === "cpmm" && market?.poolId && 
+             market.poolId !== "PLACEHOLDER_POOL_ID" && 
+             !market.poolId.startsWith("PLACEHOLDER") &&
+             market.poolId.startsWith("0x") && (
               <CPMTrade
                 marketId={market.id}
                 poolId={market.poolId}
-                treasuryCapYesId={SEED_DATA.treasuryCapYesId || ""} // TODO: Get from package or market
-                treasuryCapNoId={SEED_DATA.treasuryCapNoId || ""} // TODO: Get from package or market
+                packageId={market.packageId || SEED_DATA.packageId}
+                treasuryCapYesId={market.treasuryCapYesId || SEED_DATA.treasuryCapYesId || ""}
+                treasuryCapNoId={market.treasuryCapNoId || SEED_DATA.treasuryCapNoId || ""}
+                treasuryCapUsdoId={market.treasuryCapUsdoId || SEED_DATA.treasuryCapUsdoId}
+                yesCoinType={market.yesCoinType || SEED_DATA.yesCoinType}
+                noCoinType={market.noCoinType || SEED_DATA.noCoinType}
+                usdoFaucetId={market.usdoFaucetId || SEED_DATA.usdoFaucetId}
+                usdoFaucetPackageId={market.usdoFaucetPackageId || SEED_DATA.usdoFaucetPackageId}
                 marketState={market.state}
                 winningCoinType={market.winningCoinType}
               />
             )}
 
             {/* CPMM Not Ready Message */}
-            {tradeMode === "cpmm" && (!market?.poolId || market.poolId === "PLACEHOLDER_POOL_ID" || market.poolId.startsWith("PLACEHOLDER")) && (
+            {tradeMode === "cpmm" && (!market?.poolId || 
+             market.poolId === "PLACEHOLDER_POOL_ID" || 
+             market.poolId.startsWith("PLACEHOLDER") ||
+             !market.poolId.startsWith("0x")) && (
               <Card className="border-border bg-card">
                 <CardContent className="p-6 text-center">
                   <p className="text-sm text-muted-foreground mb-2">
@@ -503,4 +544,3 @@ export default function MarketPage({ params }: MarketPageProps) {
     </main>
   );
 }
-

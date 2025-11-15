@@ -78,7 +78,7 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
 
       // Execute transaction
       const result = await signAndExecuteTransactionBlock({
-        transaction: tx,
+        transactionBlock: tx,
         options: {
           showEffects: true,
           showEvents: true,
@@ -212,4 +212,3 @@ export function PlaceOrder({ poolId, yesCoinType, noCoinType, marketId }: PlaceO
     </Card>
   );
 }
-
